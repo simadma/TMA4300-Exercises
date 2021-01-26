@@ -75,7 +75,7 @@ set.seed(123)
 generate_from_exp <- function(n, rate = 1) {
   Y <- runif(n)
   X <- -(1 / rate) * log(1 - Y)
-  X
+  return(X)
 }
 
 # sample
