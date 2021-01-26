@@ -102,7 +102,9 @@ curve(dexp(x, rate = lambda),
 ## 2.
 
 ### (a)
-Testing
+
+More testing
+
 
 ### (b)
 
