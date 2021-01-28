@@ -135,7 +135,100 @@ curve(dexp(x, rate = lambda),
 
 ### (a)
 
+Let $f(x)$ be the target distribution we wish to sample from, and let $g(x)$ be the proposal distribution. For the rejection sampling algorithm, we require that
+\begin{equation}\label{eq:rej_samp}
+  f(x) \leq c\cdot g(x),\quad\forall x\in\mathbb R,
+\end{equation}
+for some constant $c>0$. Let $X$ and $U$ be independent samples where $X \sim g(x)$ and $U \sim \Uniform(0, 1)$. Then the acceptance probability is
+$$
+\begin{split}
+  \Pr\left(U\leq\frac{f(X)}{c\cdot g(X)}\right) &= \int_{-\infty}^\infty\int_{0}^{f(x)/(c\ g(x))}f_{X,U}(x, u)\,du\,dx \\
+  &= \int_{-\infty}^\infty\int_{0}^{f(x)/(c\ g(x))}g(x)\cdot 1\,du\,dx \\
+  &= \int_{-\infty}^\infty\frac{f(x)}{c\ g(x)}g(x)\,dx \\
+  &= \frac{1}{c}\int_{-\infty}^\infty f(x)\,dx \\
+  &= \frac{1}{c}
+\end{split}
+$$
+
+We wish to sample from $\operatorname{Gamma}(\alpha, \beta = 1)$, using the proposal distribution $g(x)$ given in `eqref{??????}`. We want to choose $c$ such that the acceptance probability is maximized while \eqref{eq:rej_samp} is satisfied. We must check three cases. The trivial case when $x\leq 0$, we have $f(x) = g(x) = 0$ so \eqref{eq:rej_samp} is satisfied for all $c$. When $0<x<1$ we have
+
+$$
+\begin{split}
+  f(x) &\leq c\,g(x) \\
+  \frac{1}{\Gamma(\alpha)}x^{\alpha - 1}e^{-x} &\leq c\,\frac{1}{\alpha^{-1} + e^{-1}}x^{\alpha - 1} \\
+  c&\geq \left(\frac{1}{\alpha} + \frac{1}{e}\right)\frac{1}{\Gamma(\alpha)}e^{-x} \\
+  c&\geq \left(\frac{1}{\alpha} + \frac{1}{e}\right)\frac{1}{\Gamma(\alpha)}.
+\end{split}
+$$
+
+The last case, when $x\geq 1$, we have
+$$
+\begin{split}
+  f(x) &\leq c\,g(x) \\
+  \frac{1}{\Gamma(\alpha)}x^{\alpha - 1}e^{-x} &\leq c\,\frac{1}{\alpha^{-1} + e^{-1}}e^{-x} \\
+  c&\geq \left(\frac{1}{\alpha} + \frac{1}{e}\right)\frac{1}{\Gamma(\alpha)}x^{\alpha - 1} \\
+  c&\geq \left(\frac{1}{\alpha} + \frac{1}{e}\right)\frac{1}{\Gamma(\alpha)}.
+\end{split}
+$$
+That is, we choose $c := (\alpha^{-1} + e^{-1})/\Gamma(\alpha)$, such that the acceptance probability becomes
+$$
+\Pr\left(U\leq\frac{f(X)}{c\cdot g(X)}\right) = \frac{1}{c} = \frac{\Gamma(\alpha)}{\alpha^{-1} + e^{-1}},\quad \alpha\in(0, 1).
+$$
+
+
 ### (b)
+
+```{r}
+set.seed(137)
+
+g_proposal <- function(x, alpha = 0.5) {
+  k <- 1 / (1 / alpha + 1 / exp(1))
+  y <- ifelse(
+         test = x <= 0,
+         yes  = 0,
+         no   = ifelse(
+                  test = x < 1,
+                  yes  = k * x^(alpha - 1),
+                  no   = k * exp(-x)
+                )
+       )
+  return(y)
+}
+
+
+generate_from_gamma <- function(n, shape = 0.5) {
+  c <- gamma(shape) / (1 / shape + 1 / exp(1))
+  x <- vector(mode = "numeric", length = n)
+  for (i in 1:n) {
+    repeat{
+      x[i] <- generate_from_g(1, shape)  # draw from g !!!!CURRENTLY MISSING THIS FUNCTION
+      u <- runif(1)  # draw from U(0, 1)
+      f <- dgamma(x[i], shape = shape)
+      g <- g_proposal(x[i], alpha = shape)
+      alpha <- (1 / c) * (f / g)
+      if (u <= alpha) {
+        break
+      }
+    }
+  }
+  return(x)
+}
+
+# n <- 1000000
+# alpha <- 0.9
+# x <- generate_from_gamma(n, shape = alpha)
+# hist(x,
+#   breaks      = 80,
+#   probability = TRUE,
+#   xlim        = c(0, 6)
+# )
+# curve(dgamma(x, shape = alpha),
+#   add = TRUE,
+#   lwd = 2,
+#   col = "red"
+# )
+```
+
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
