@@ -181,30 +181,15 @@ $$
 ```{r}
 set.seed(137)
 
-g_proposal <- function(x, alpha = 0.5) {
-  k <- 1 / (1 / alpha + 1 / exp(1))
-  y <- ifelse(
-         test = x <= 0,
-         yes  = 0,
-         no   = ifelse(
-                  test = x < 1,
-                  yes  = k * x^(alpha - 1),
-                  no   = k * exp(-x)
-                )
-       )
-  return(y)
-}
-
-
 generate_from_gamma <- function(n, shape = 0.5) {
-  c <- gamma(shape) / (1 / shape + 1 / exp(1))
+  c <- gamma(shape) / (1 / shape + 1 / exp(1))   # constant that minimizes the envelope
   x <- vector(mode = "numeric", length = n)
   for (i in 1:n) {
     repeat{
-      x[i] <- generate_from_g(1, shape)  # draw from g !!!!CURRENTLY MISSING THIS FUNCTION
-      u <- runif(1)  # draw from U(0, 1)
-      f <- dgamma(x[i], shape = shape)
-      g <- g_proposal(x[i], alpha = shape)
+      x[i] <- generate_from_piecewise(1, shape)  # draw from proposal
+      u <- runif(1)                              # draw from U(0, 1)
+      f <- dgamma(x[i], shape = shape)           # target value
+      g <- theo_PDF(x[i], alpha = shape)         # proposal value
       alpha <- (1 / c) * (f / g)
       if (u <= alpha) {
         break
