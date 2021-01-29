@@ -23,6 +23,7 @@ knitr::opts_chunk$set(echo = TRUE, tidy = FALSE, message = FALSE, warning = FALS
 \newcommand{\Corr}{\operatorname{Corr}}
 \newcommand{\Exp}{\operatorname{Exponential}}
 \newcommand{\Uniform}{\operatorname{Uniform}}
+\newcommand{\Normal}{\operatorname{Normal}}
 \newcommand{\SD}{\operatorname{SD}}
 \newcommand{\RSS}{\mathrm{RSS}}
 \newcommand{\MSE}{\mathrm{MSE}}
@@ -324,7 +325,7 @@ theo_fx <- function(x, alpha) {
 # Plot
 ggplot() +
   geom_histogram(
-    data = as.data.frame(gx_samp),
+    data = as.data.frame(fx_samp),
     mapping = aes(x = fx_samp, y = ..density..),
     binwidth = 0.001,
     boundary = 0
@@ -362,6 +363,45 @@ var(fx_samp)
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 4.
+We wish to simulate from a $\Normal(0, 1)$ distribution using the Box-Muller algoritm. If $X_1 \sim \Uniform(0, \pi)$ and $X_2 \sim \Exp(1/2)$, then $Y_1 = \sqrt{X_2} \cos(X_1)$ and $Y_2 = \sqrt{X_2} \sin(X_1)$ are standard normal distributed. We use $Z = \sqrt{X_2} \cos(X_1)$ in the following code block. The result of the simulation can be seen in Figure \ref{fig:Box_Muller}, and it also shows the theoretical probability density function.
+
+```{r generate from Box-Muller, fig.cap = "\\label{fig:Box_Muller}One million samples drawn from a standard normal distribution using the Box-Muller algorithm, together with the theoretical PDF."}
+
+std_normal <- function(n) {
+  X1 <- pi * runif(n)   # n samples from Uniform(0, pi)
+  X2 <- generate_from_exp(n, 1/2)   # n samples from Exponential(1/2)
+  Z <- X2^(1/2) * cos(X1)   # Z ~ Normal(0, 1)
+  return(Z)
+}
+
+# Sample
+n <- 1000000  # One million samples
+Box_Muller <- std_normal(n)   # Generating n samples from Normal(0, 1)
+
+# Plot
+ggplot() +
+  geom_histogram(
+    data = as.data.frame(Box_Muller),
+    mapping = aes(x = Box_Muller, y = ..density..),
+    binwidth = 0.05,
+    boundary = 0
+  ) +
+  stat_function(
+    fun = dnorm,
+    aes(col = "Theoretical density")
+  ) +
+  ggtitle("Simulating from standard normal distribution") +
+  xlab("z") +
+  ylab("Density") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+We know that if $Z \sim \Normal(0, 1)$, then $\E(Z) = 0$ and $\Var(Z) = 1$, and this corresponds to the approximate sample mean and variance shown in the code block below.
+```{r, eval = TRUE}
+mean(Box_Muller)
+var(Box_Muller)
+```
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
