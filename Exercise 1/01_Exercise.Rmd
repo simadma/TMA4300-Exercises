@@ -33,6 +33,7 @@ knitr::opts_chunk$set(echo = TRUE, tidy = FALSE, message = FALSE, warning = FALS
 \newcommand{\diag}{\operatorname{diag}}
 \newcommand{\argmin}{\operatorname*{arg\,min}}
 \newcommand{\argmax}{\operatorname*{arg\,max}}
+\newcommand{\e}{\mathrm{e}}
 
 
 ```{r libraries, eval = TRUE, echo = FALSE}
@@ -104,7 +105,7 @@ ggplot() +
   ) +
   ylim(0, lambda) +
   xlim(0, 2) +
-  ggtitle("Dimulating from an exponential distribution") +
+  ggtitle("Simulating from an exponential distribution") +
   xlab("x") +
   ylab("Density") +
   theme_minimal() +
@@ -181,17 +182,18 @@ $$
   \begin{cases}
     \left( \frac{\alpha + \mathrm{e}}{\mathrm{e}} x \right)^{1/\alpha} & \text{if } 0 \leq x < \frac{\mathrm{e}}{\alpha + \mathrm{e}},
     \\
-    \ln\left[ \frac{\alpha \mathrm{e}}{(1-x) (\alpha + \mathrm{e})} \right] & \text{if } x \geq \frac{\mathrm{e}}{\alpha + \mathrm{e}},
+    \ln\left[ \frac{\alpha \mathrm{e}}{(1-x) (\alpha + \mathrm{e})} \right] & \text{if } \frac{\mathrm{e}}{\alpha + \mathrm{e}} \leq x \leq 1,
   \end{cases}
 $$
 for $\alpha \in (0, 1)$.
 
 
 ### Subsubproblem (b)
+Using what we found in (a) we may use the inversion method to sample from $g(x)$ given in Equation \eqref{eq:gx}, as shown in the code block beneath. Figure \ref{fig:g_hist} shows one million samples drawn from `generate_from_gx()` and also the theoretical PDF.
 
-```{r generate from piecewise, fig.cap = "\\label{fig:g_hist}Normalized histogram of one million samples drawn from $g(x)$ given in Equation \\eqref{eq:gx}, together with the theoretical PDF, with $\\alpha = 0.75$."}
+```{r generate from gx, fig.cap = "\\label{fig:g_hist}Normalized histogram of one million samples drawn from $g(x)$ given in Equation \\eqref{eq:gx}, together with the theoretical PDF, with $\\alpha = 0.75$."}
 
-generate_from_piecewise <- function(n, alpha) {
+generate_from_gx <- function(n, alpha) {
   U <- runif(n)   # Generate n Uniform(0, 1) variables
   bound <- exp(1) / (alpha + exp(1))   # Boundary where G^(-1) changes
   left <- U < bound   # The left of the boundary
@@ -203,12 +205,12 @@ generate_from_piecewise <- function(n, alpha) {
 # Sample
 n <- 1000000  # One million samples
 alpha <- 0.75
-x <- generate_from_piecewise(n, alpha)
+gx_samp <- generate_from_gx(n, alpha)   # Generating n samples from g(x)
 
 # The theoretically correct PDF
-theo_PDF <- function(x, alpha) {
+theo_gx <- function(x, alpha) {
   const <- alpha * exp(1) / (alpha + exp(1))    # Normalizing constant
-  func <- rep(0, length(x))
+  func <- rep(0, length(x))   # Vector of zeros of same length as x
   left <- x > 0 & x < 1   # The PDF has one value for 0 < x < 1
   right <- x >= 1         # ... and one value for x >= 1
   func[left] <- const * x[left]^(alpha - 1)   # The value to the left
@@ -219,43 +221,152 @@ theo_PDF <- function(x, alpha) {
 # Plot
 ggplot() +
   geom_histogram(
-    data = as.data.frame(x),
-    mapping = aes(x = x, y = ..density..),
+    data = as.data.frame(gx_samp),
+    mapping = aes(x = gx_samp, y = ..density..),
     binwidth = 0.05,
     boundary = 0
   ) +
   stat_function(
-    fun = theo_PDF,
+    fun = theo_gx,
     args = list(alpha = alpha),
     aes(col = "Theoretical density")
   ) +
   xlim(0, 5) +
   ggtitle("Simulating from g(x) given in Equation (2)") +
+  xlab("x") +
   ylab("Density") +
   theme_minimal() +
   theme(plot.title = element_text(hjust = 0.5))
 ```
 
+Assuming $X \sim g(x)$ we may find the expectation to be
+$$
+  \E(X) = \int_{\mathbb{R}} x g(x) \,\mathrm{d}x = \int_0^1 c x^\alpha \,\mathrm{d}x + \int_1^\infty c x \mathrm{e}^{-x} \,\mathrm{d}x = \frac{\alpha \e}{(\alpha+1)(\alpha+\e)} + \frac{2 \alpha}{\alpha + \e} \approx 0.768,
+$$
+when $\alpha = 0.75$. This corresponds approximately to the sample mean shown in the following code block.
+```{r, eval = TRUE}
+mean(gx_samp)
+```
+Similarly we may find the theoretical variance to be
+$$
+  \Var(X) = \E(X^2) - \E(X)^2 \approx 0.705,
+$$
+also for $\alpha = 0.75$, corresponding approximately to the sample variance given in the code block below.
+```{r, eval = TRUE}
+var(gx_samp)
+```
+
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
-## 3.
+## Subproblem 3.
 
-### (a)
+### Subsubproblem (a)
+We consider the probability density function
+$$
+  f(x) = \frac{c \e^{\alpha x}}{(1 + \e^{\alpha x})^2},
+$$
+for $-\infty < x < \infty$ and $\alpha > 0$. To find the normalizing constant $c$ we make sure that the integral over $\mathbb{R}$ of $f(x)$ is one. That is
+$$
+  1 = \int_\mathbb{R} f(x) \,\mathrm{d}x = c\int_\mathbb{R} \frac{ \e^{\alpha x}}{(1 + \e^{\alpha x})^2} \,\mathrm{d}x,
+$$
+and letting $u = 1 + \e^{\alpha x}$, it follows that
+$$
+  1 = \frac{c}{\alpha} \int_1^\infty \frac{\mathrm{d}u}{u^2} = \frac{c}{\alpha} \left[ -\frac{1}{u} \right]_1^\infty = \frac{c}{\alpha}.
+$$
+That is, the normalizing constant is $c = \alpha$, for $\alpha > 0$. We may then write the probability density function as
+\begin{equation} \label{eq:fx}
+  f(x) = \frac{\alpha \e^{\alpha x}}{(1 + \e^{\alpha x})^2},
+\end{equation}
+for $-\infty < x < \infty$ and $\alpha > 0$.
 
-### (b)
 
-### (c)
+### Subsubproblem (b)
+The cumulative distribution function is given as
+$$
+  F(x) = \int_{-\infty}^x f(\xi) \,\mathrm{d}\xi = \int_{-\infty}^x \frac{\alpha \e^{\alpha \xi}}{(1 + \e^{\alpha \xi})^2} \,\mathrm{d}\xi.
+$$
+Again letting $u = 1 + \e^{\alpha \xi}$ it follows that
+$$
+  F(x) = \int_{1}^{1+\e^{\alpha x}} \frac{\alpha \e^{\alpha \xi}}{u^2} \frac{\mathrm{d}u}{\alpha \e^{\alpha \xi}} = \int_{1}^{1+\e^{\alpha x}} \frac{\mathrm{d}u}{u^2} = \left[ \frac{1}{u} \right]_{1+\e^{\alpha x}}^1 = 1 - \frac{1}{1+\e^{\alpha x}} = \frac{\e^{\alpha x}}{1+\e^{\alpha x}},
+$$
+which holds for $-\infty < x < \infty$ and $\alpha > 0$.
+
+Solving $x = \e^{\alpha y} / (1 + \e^{\alpha y})$ for $y$ then gives us the inverse cumulative distribution function. Some algebra then gives that
+$$
+  F^{-1}(x) = \frac{1}{\alpha} \ln\left( \frac{x}{1-x} \right) = \frac{1}{\alpha} \left[ \ln\left( x \right) - \ln\left( 1-x \right) \right],
+$$
+for $0 < x < 1$ and $\alpha > 0$.
+
+
+### Subsubproblem (c)
+
+Simulating from $f(x)$ given in Equation \eqref{eq:fx} is shown in the code block below, and the result is shown in Figure \ref{fig:f_hist}. The sampling is done by letting $U \sim \Uniform(0, 1)$ and using inversion sampling.
+
+```{r generate from fx, fig.cap = "\\label{fig:f_hist}Normalized histogram of one million samples drawn from $f(x)$ given in Equation \\eqref{eq:fx}, together with the theoretical PDF, with $\\alpha = 100$."}
+
+generate_from_fx <- function(n, alpha) {
+  U <- runif(n)   # Generate n Uniform(0, 1) variables
+  X <- 1 / alpha * (log(U) - log(1 - U))    # Using the inverse CDF
+  return(X)
+}
+
+# Sample
+n <- 1000000  # One million samples
+alpha <- 100  # Letting alpha be 100
+fx_samp <- generate_from_fx(n, alpha)   # Generating n samples from f(x)
+
+# The theoretically correct PDF
+theo_fx <- function(x, alpha) {
+  return(alpha * exp(alpha * x) / (1 + exp(alpha * x))^2)
+}
+
+# Plot
+ggplot() +
+  geom_histogram(
+    data = as.data.frame(gx_samp),
+    mapping = aes(x = fx_samp, y = ..density..),
+    binwidth = 0.001,
+    boundary = 0
+  ) +
+  stat_function(
+    fun = theo_fx,
+    args = list(alpha = alpha),
+    aes(col = "Theoretical density")
+  ) +
+  ggtitle("Simulating from f(x) given in Equation (3)") +
+  xlab("x") +
+  ylab("Density") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Letting $X \sim f(x)$ we may find the expected value to be
+$$
+  \E(X) = \int_\mathbb{R} xf(x) \,\mathrm{d}x = \int_\mathbb{R} \frac{\alpha x \e^{\alpha x}}{(1 + \e^{\alpha x})^2} \,\mathrm{d}x = 0,
+$$
+because of symmetry. This is confirmed in the following code block where we see that the sample mean is approximately zero. This also holds for all $\alpha > 0$.
+```{r, eval = TRUE}
+mean(fx_samp)
+```
+We may also find the variance of $X$ to be
+$$
+  \Var(X) = \E(X^2) = \int_\mathbb{R} \frac{\alpha x^2 \e^{\alpha x}}{(1 + \e^{\alpha x})^2} \,\mathrm{d}x \approx 0.000329,
+$$
+for $\alpha = 100$. This also corresponds to the sample variance as shown in the code block below.
+```{r, eval = TRUE}
+var(fx_samp)
+```
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
-## 4.
+## Subproblem 4.
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
-## 5
+## Subproblem 5.
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 [//]: # ----------------------------------------------------------------------------------------------------------------
