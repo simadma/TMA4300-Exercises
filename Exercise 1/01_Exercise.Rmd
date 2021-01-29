@@ -407,6 +407,54 @@ var(Box_Muller)
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 5.
+We wish to simulate from a $d$-variate normal distribution with mean vector $\mu$ and covariance matrix $\Sigma$. Let $Z \sim \Normal_d(0, I_d)$, where $I_d$ is the identity matrix in $\mathbb{R}^{d \times d}$ and $0$ is the zero-vector in $\mathbb{R}^{d}$. Then
+$$
+  X = \mu + A Z \sim \Normal_d(\mu, A A^\top),
+$$
+such that we need to find $A$ such that $\Sigma = A A^\top$, this is done using `chol()` in `R`, and we construct the function in the following code block.
+
+```{r generate from d-variate normal}
+
+d_variate_normal <- function(n, mu, Sigma) {
+  d <- length(mu)   # The dimension d is the dimension of mu
+  A <- t(chol(Sigma)) # Cholesky decomposition of Sigma. Transpose to get lower triangular
+  Z <- matrix(0, d, n)
+  for(i in 1:d) {   # Create d realizations of Normal(0, 1)
+    Z[i, ] <- std_normal(n)   # Put realizations of Normal(0, 1) in row of Z
+  }
+  X <- mu + A %*% Z   # X ~ Normal_d(mu, Sigma) 
+  return(X)
+}
+```
+We now test the implementation using one million samples in $\mathbb{R}^3$, with
+$$
+  \mu =
+  \begin{bmatrix}
+    1 \\ 7 \\ 2
+  \end{bmatrix}
+  \quad \text{and} \quad
+  \Sigma =
+  \begin{bmatrix}
+    2 & -1 & 0 
+    \\
+    -1 & 2 & -1 
+    \\
+    0 & -1 & 2
+  \end{bmatrix}.
+$$
+We then expect the sample mean and sample covariance matrix to be approximately equal to these. In the following code block we see that this is indeed the case.
+```{r generate from d-variate normal example}
+# Sample
+n <- 1000000    # One million samples
+mu <- c(1, 7, 2)   # Create mu
+Sigma <- matrix(c(2, -1, 0, -1, 2, -1, 0, -1, 2), nrow = 3)    # Create Sigma
+normal <- d_variate_normal(n, mu, Sigma)    # Sample from d-variate normal
+
+# Test
+rowMeans(normal)  # Finding the mean of the rows of normal, sample mean
+cov(t(normal))    # Transpose because we want with respect to the rows
+```
+
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 [//]: # ----------------------------------------------------------------------------------------------------------------
