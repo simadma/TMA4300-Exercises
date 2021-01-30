@@ -181,15 +181,15 @@ $$
 ```{r gamma rejection sampling}
 set.seed(137)
 
-generate_from_gamma <- function(n, shape = 0.5) {
-  c <- gamma(shape) / (1 / shape + 1 / exp(1))   # constant that minimizes the envelope
+sample_from_gamma_rej <- function(n, shape = 0.5) {
+  c <- (1 / shape + 1 / exp(1)) / gamma(shape)    # constant that minimizes the envelope
   x <- vector(mode = "numeric", length = n)
   for (i in 1:n) {
     repeat {
-      x[i] <- generate_from_piecewise(1, shape)  # draw from proposal
-      u <- runif(1)                              # draw from U(0, 1)
-      f <- dgamma(x[i], shape = shape)           # target value
-      g <- theo_PDF(x[i], alpha = shape)         # proposal value
+      x[i] <- generate_from_gx(1, alpha = shape)  # draw from proposal
+      u <- runif(1)                               # draw from U(0, 1)
+      f <- dgamma(x[i], shape = shape)            # target value
+      g <- theo_gx(x[i], alpha = shape)           # proposal value
       alpha <- (1 / c) * (f / g)
       if (u <= alpha) {
         break
@@ -201,7 +201,7 @@ generate_from_gamma <- function(n, shape = 0.5) {
 
 # n <- 1000000
 # alpha <- 0.9
-# x <- generate_from_gamma(n, shape = alpha)
+# x <- sample_from_gamma_rej(n, shape = alpha)
 # hist(x,
 #   breaks      = 80,
 #   probability = TRUE,
@@ -296,9 +296,9 @@ lgamma_core <- function(x, alpha = 2) {
   )
 }
 
-sample_from_gamma_rou <- function(n, alpha = 2, include_trials = FALSE) {
-  log_a <- ((alpha - 1) / 2) * (log(alpha - 1) - 1)
-  log_b <- ((alpha + 1) / 2) * (log(alpha + 1) - 1)
+sample_from_gamma_rou <- function(n, shape = 2, include_trials = FALSE) {
+  log_a <- ((shape - 1) / 2) * (log(shape - 1) - 1)
+  log_b <- ((shape + 1) / 2) * (log(shape + 1) - 1)
   trials <- 0
   y <- vector(mode = "numeric", length = n)
   for (i in 1:n) {
@@ -306,7 +306,7 @@ sample_from_gamma_rou <- function(n, alpha = 2, include_trials = FALSE) {
       log_x1 <- log_a + log(runif(1))
       log_x2 <- log_b + log(runif(1))
       y[i] <- exp(log_x2 - log_x1)
-      log_f <- lgamma_core(y[i], alpha = alpha)
+      log_f <- lgamma_core(y[i], alpha = shape)
       if (log_x1 <= 0.5 * log_f) {
         break
       } else {
@@ -343,13 +343,70 @@ Figure \ref{fig:gamma-trials} strongly suggests that the acceptance probability 
 ## 3.
 
 ### (a)
+Let $X_1$ and $X_2$ be independent random variables where $X_1\sim\operatorname{Gamma}(\alpha_1, \beta=1)$ and $X_2\sim\operatorname{Gamma}(\alpha_2, \beta=1)$.
+Then $X_1 + X_2$ has the following mgf:
+$$
+\begin{split}
+  M_{X_1 + X_2}(t)  &= M_{X_1}(t)\cdot M_{X_2}(t) \\
+  &= (1 - t)^{-\alpha_1}\cdot(1 - t)^{-\alpha_2} \\
+  &= (1 - t)^{-(\alpha_1 + \alpha_2)}, \quad t < 1.
+\end{split}
+$$
+That is, $X_1 + X_2\sim\operatorname{Gamma}(\alpha_1 + \alpha_2, \beta = 1)$.
 
 ### (b)
+
+A $\Exp(1)$ distribution is a special case of $\operatorname{Gamma}(\alpha, \beta)$ with parameters $\alpha=\beta=1$. Using the result obtained in **(a)**, we then have that the sum of a random sample $X_1,\ldots, X_k$ drawn from $\Exp(1)$ has a $\operatorname{Gamma}(k, 1)$ distribution. We can use this fact to improve our algorithm. 
+Let $k\in\mathbb N_0$ and let $r\in[0, 1)$ and assume $k + r > 0$. Then we can decompose any $\alpha>0$ as
+$$
+  \alpha = k + r.
+$$
+Let $X_1,\ldots,X_k\sim\Exp(1)$ be a random sample and $W\sim \operatorname{Gamma}(r, 1)$, where $W$ and $X_i$, $i = 1,\ldots, k$ are mutual independent. Then
+\begin{equation}\label{eq:gamma_exp}
+  Y = W + \sum_{i=1}^k X_i \sim \operatorname{Gamma}(\alpha = k + r, \beta = 1).
+\end{equation}
+
+That is, for any $\alpha > 0$, we will only use the rejection sampling method for $r = \alpha \operatorname{mod} 1$ to sample $W\sim\operatorname{Gamma}(r, 1)$, and for the remaining $k = \alpha - r$ (possibly zero), we sample $X_1,\dots,X_k\sim\Exp(1)$, and use \eqref{eq:gamma_exp} to sample from $\operatorname{Gamma}(\alpha,1)$.
+
+```{r}
+sample_from_gamma_improved <- function(n, shape = 1) {
+  r <- shape %% 1
+  if (r > 0) {
+    w <- sample_from_gamma_rej(n, shape = r)
+  } else {
+    w <- 0
+  }
+  k <- shape - r
+  if (k >= 1) {
+    xk <- matrix(generate_from_exp(n * k, rate = 1),
+                 nrow = n,
+                 ncol = k
+    )
+    x <- rowSums(xk)
+  } else {
+    x <- 0
+  }
+  return(x + w)
+}
+```
+
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## 4.
+
+Since $\beta$ is an inverse scale parameter, we can simply draw samples from $\operatorname{Gamma}(\alpha, 1)$ and divide every sample by $\beta$. This can be shown by looking at the mgf of $X/\beta$ where $X\sim \operatorname{Gamma}(\alpha, 1)$.
+
+$$
+  M_{X/\beta}(t) = M_X\left(\frac{t}{\beta}\right) = \left(1 - \frac{t}{\beta}\right)^{-\alpha} \sim \operatorname{Gamma}(\alpha,\beta).
+$$
+
+```{r final gamma sampler}
+sample_from_gamma_final <- function(n, shape = 1, rate = 1) {
+  (1 / rate) * sample_from_gamma_improved(n, shape = shape)
+}
+```
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
@@ -357,8 +414,45 @@ Figure \ref{fig:gamma-trials} strongly suggests that the acceptance probability 
 ## 5.
 
 ### (a)
+Let $X$ and $Y$ be independent random variables where $X\sim\operatorname{Gamma}(\alpha, 1)$ and $Y\sim\operatorname{Gamma}(\beta, 1)$. Let
+$$
+z = g_1(x, y) = \frac{x}{x + y} \quad \text{and}\quad w = g_2(x, y) = x + y
+$$
+Then $Z = g_1(X, Y)\in(0,1)$ and $W = g_2(X, Y)>0$. This gives us
+$$
+\begin{split}
+  &x = g_1^{-1}(z, w) = zw\quad\text{and}\quad y = g_2^{-1}(z, w) = w(1 - z), \\
+  &|\det(J)| = \left|\det\left(\begin{matrix}
+    \partial_zg_1^{-1}(z, w) & \partial_wg_1^{-1}(z, w) \\
+    \partial_zg_2^{-1}(z, w) & \partial_wg_2^{-1}(z, w)
+  \end{matrix}\right)\right| = \left|\det\left(\begin{matrix}
+    w & z \\
+    -w & 1 - z
+  \end{matrix}\right)\right| = |w| = w.
+\end{split}
+$$
+The marginal distribution $f_Z(z)$ is then found as follows.
+$$
+\begin{split}
+  f_Z(z) &= \int_{0}^\infty f_{Z,W}(z, w)\,dw \\
+  &=\int_0^\infty f_{X,Y}\left(g_1^{-1}(z, w), g_2^{-1}(z, w)\right)|\det(J)|\,dw \\
+  &= \int_0^\infty f_X\left(zw\right)\cdot f_Y\left(w(1 - z)\right)\cdot w\,dw \\
+  &= \int_0^\infty \frac{1}{\Gamma(\alpha)}(zw)^{\alpha - 1}e^{-zw}\cdot\frac{1}{\Gamma(\beta)}(w(1 - z))^{\beta - 1}e^{-w(1 - z)}\cdot w\,dw \\
+  &= \frac{1}{\Gamma(\alpha)\Gamma(\beta)}z^{\alpha - 1}(1 - z)^{\beta - 1} \Gamma(\alpha + \beta) \int_{0}^\infty \frac{1}{\Gamma(\alpha + \beta)} w^{(\alpha + \beta) - 1}e^{-w}\,dw \\
+  &= \frac{\Gamma(\alpha + \beta)}{\Gamma(\alpha)\Gamma(\beta)}z^{\alpha - 1}(1 - z)^{\beta - 1},\quad z\in(0, 1).\\
+\end{split}
+$$
+That is, $f_Z(z)\sim \operatorname{Beta}(\alpha, \beta)$.
 
 ### (b)
+```{r}
+sample_from_beta <- function(n, alpha, beta) {
+  x <- sample_from_gamma_final(n, shape = alpha)
+  y <- sample_from_gamma_final(n, shape = beta)
+  return(x / (x + y))
+}
+```
+
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
