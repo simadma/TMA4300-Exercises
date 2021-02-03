@@ -444,6 +444,7 @@ $$
 $$
 We then expect the sample mean and sample covariance matrix to be approximately equal to these. In the following code block we see that this is indeed the case.
 ```{r generate from d-variate normal example}
+
 # Sample
 n <- 1000000    # One million samples
 mu <- c(1, 7, 2)   # Create mu
