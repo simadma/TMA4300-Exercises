@@ -183,25 +183,62 @@ and assuming a prior that is $\Uniform(0, 1)$ the posterior will be
 $$
   f(\theta \mid \bfy) \propto f^*(\theta) := (2+\theta)^{y_1} (1-\theta)^{y_2+y_3} \theta^{y_3},
 $$
-for $\theta \in (0, 1)$. We wish to sample from this using a $\Uniform(0, 1)$ proposal density, that is, $g(\theta \mid \bfy) = 1$, for $\theta \in (0, 1)$. Because we do not know the normalizing constant, we may use weighted resampling, which is an approximate algorithm. We do this by first generating $\Theta_1, \dots, \Theta_n \sim g(\theta) \sim \Uniform(0, 1)$ and then calculate the weights
+for $\theta \in (0, 1)$. We wish to sample from this using a $\Uniform(0, 1)$ proposal density, that is, $g(\theta \mid \bfy) = 1$, for $\theta \in (0, 1)$. To do a rejection sampling (not weighted rejection sampling), we need to know the normalizing constant of $f(\theta \mid \bfy)$. That is, the constant $k$ such that $f(\theta \mid \bfy) = k f^*(\theta \mid \bfy)$. This can be found as
 $$
-  w(\Theta_i) = \frac{f(\Theta_i) / g(\Theta_i)}{\sum_{j=1}^n f(\Theta_j) / g(\Theta_j)} = \frac{f(\Theta_i)}{\sum_{j=1}^n f(\Theta_j)},
+  \frac 1 K = \int_\mathbb{R} f^*(\theta \mid \bfy) \, \mathrm{d} \theta = \int_0^1 f^*(\theta \mid \bfy) \, \mathrm{d} \theta \approx 2.3577 \cdot 10^{28},
 $$
-because $g(\theta) = 1$ for all $\theta \in (0, 1)$. We then generate a second sample of size $m$ from the discrete distribution $\{ \Theta_1, \dots, \Theta_n \}$ with probabilities $w(\Theta_1), \dots, w(\Theta_n)$. This is done in the code block below, where we choose $m$ such that $n/m = 20$.
+and we find it using the `integrate()`-function in `R` below. To use the rejection sampling we also need that
+$$
+  \frac{f(\theta \mid \bfy)}{g(\theta \mid \bfy)} = f(\theta \mid \bfy) \leq k,
+$$
+and a value for $k$ is found in the code block below. We then simulate $\Theta \sim \Uniform(0, 1)$ and $U \sim \Uniform(0, 1)$ and calculate $\alpha = f(\theta \mid \bfy) / k$. Then, if $U \leq \alpha$, $\Theta$ is returned, and if not, the procedure is run again. We then sample from the posterior distribution in the code block below.
 
-```{r generate using weighted resampling}
+```{r generate using rejection sampling}
 
-posterior_f_star <- function(theta, y) {
+y <- c(125, 18, 20, 34)   # Observed data
+
+# Define the un-normalized posterior distribution f*(theta | y)
+posterior_star <- function(theta, y) {
   return((2 + theta)^(y[1]) * (1 - theta)^(y[2] + y[3]) * theta^(y[4]))
 }
 
-weighted_resampling_f <- function(n, y) {
-  Theta <- runif(n)   # Generate n Uniform(0, 1) variables
-  f_star <- posterior_f_star(Theta, y)    # Calculating the vector f_star
-  W <- f_star / sum(f_star)   # Calculating the weights
-  m <- n / 20   # Using m such that n / m = 20
-  X <- sample(Theta, size = m, prob = W)  # Sample m values from Theta with probability W
-  return(X)
+# Find the normalizing constant 1 / K
+norm_const <- integrate(function(theta)(posterior_star(theta, y)),
+                        lower = 0,
+                        upper = 1)$value
+
+# Defining the normalized posterior distribution f(theta | y)
+posterior <- function(theta, y) {
+  return(posterior_star(theta, y) / norm_const)
+}
+
+# Finding the maximum 
+posterior_star_max <- optimize(function(theta)(posterior_star(theta, y)),
+                               interval = c(0, 1),
+                               maximum = TRUE)$objective
+
+# k such that f(theta | y) <= k
+k <- posterior_star_max / norm_const
+
+# Rejection sampling algorithm
+rejection_sampling <- function(M, y) {
+  n <- 10 * M   # Wish M samples from f, need to generate more from Unif(0, 1)
+  Theta <- runif(n)
+  U <- runif(n)
+  count <- 0      # Count how many times the algorithm runs
+  accept <- c()   # List of the accepted samples
+  
+  while(length(accept) < M) {
+    test_u <- U[count]
+    alpha <- posterior(Theta[count], y) / k
+    if(test_u <= alpha) {
+      accept <- rbind(accept, Theta[count])
+      count <- count + 1
+    } else {
+      count <- count + 1
+    }
+  }
+  return(list("accept" = accept, "co" = count))
 }
 ```
 
@@ -216,35 +253,26 @@ $$
 We do this for $M = 10000$ in the code block below. Figure \ref{fig:Monte_Carlo} shows the result of this. We see the estimation of the posterior mean $\E(\theta \mid \bfy)$ using Monte Carlo integration and numerical integration together with the theoretical posterior density distribution and a generated histogram of the samples. In the figure the posterior density is plotted using a normalizing constant we find by numerical integration in `R` below, giving the normalizing constant `norm_const`.
 
 ```{r Monte Carlo, fig.cap = "\\label{fig:Monte_Carlo}Estimation of the posterior mean $\\E(\\theta \\mid \\bfy)$ using Monte Carlo integration and numerical integration. A histogram of the samples is also shown together with the theoretical posterior density distribution."}
-set.seed(69)
 
 M <- 10000    # Number of samples from f(theta | y)
-n <- 20 * M   # Number of samples needed to give M samples from f(theta | y)
-y <- c(125, 18, 20, 34)   # Observed data
-Theta_samp <- weighted_resampling_f(n, y)   # M samples from f(theta | y)
-mu_est <- mean(Theta_samp)    # = 1/M * sum(Theta_samp)
 
-# Integrating numerically
-norm_const <- integrate(function(theta)(posterior_f_star(theta, y)),
-                        lower = 0,
-                        upper = 1)$value  # Integrate to find normalizing constant
-posterior_f <- function(theta, y) {   # Creating the true posterior f
-  return(posterior_f_star(theta, y) / norm_const)
-}
-mu_num <- integrate(function(theta)(theta * posterior_f(theta, y)),
+Theta_samp <- rejection_sampling(M, y)   # M samples from f(theta | y)
+mu_est <- mean(Theta_samp$accept)    # = 1/M * sum(Theta_samp)
+
+mu_num <- integrate(function(theta)(theta * posterior(theta, y)),
                     lower = 0,
                     upper = 1)$value    # Value of mu by numerical integration
 
 # Plot
 ggplot() +
   geom_histogram(
-    data = as.data.frame(Theta_samp),
-    mapping = aes(x = Theta_samp, y = ..density..),
+    data = as.data.frame(Theta_samp$accept),
+    mapping = aes(x = Theta_samp$accept, y = ..density..),
     binwidth = 0.01,
     boundary = 0
   ) +
   stat_function(
-    fun = posterior_f,
+    fun = posterior,
     args = list(y = y),
     aes(col = "Posterior density")
   ) +
@@ -273,11 +301,34 @@ From this it is clear that the estimated posterior mean is $\hat{\mu} \approx 0.
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 3.
+We are now interested in the number of random numbers the sampling algorithm needs to obtain one sample from $f(\theta \mid \bfy)$. The expected number of trials up to the first sample from $f(\theta \mid \bfy)$ is $c$ given by the condition
+$$
+  \frac{f(\theta \mid \bfy)}{g(\theta \mid \bfy)} = f(\theta \mid \bfy) \leq c.
+$$
+We may then choose
+$$
+  c \geq \max_{\theta \in [0, 1]} f(\theta \mid \bfy),
+$$
+and we choose the equality. Thus we may find $c$ in `R` using the `optimize()`-function, and call this `const_num` to symbolize that this is the numerically calculated value, as in the following code block.
+```{r optimize}
+const_num <- optimize(function(theta)(posterior_f(theta, y)),
+                      interval = c(0, 1),
+                      maximum = TRUE)$objective
+const_num
+```
+Using the sampler, the expected number of random numbers that has to be generated in order to obtain one sample of $f(\theta \mid \bfy)$ is given in the following code block.
+```{r using the sampling}
+Theta_samp$co / M
+```
 
 
-[//]: # ----------------------------------------------------------------------------------------------------------------
 
-## Subproblem 4.
+## Subsection 4.
+...
+
+
+
+
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
