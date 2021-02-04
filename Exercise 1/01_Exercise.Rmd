@@ -418,10 +418,8 @@ such that we need to find $A$ such that $\Sigma = A A^\top$, this is done using 
 d_variate_normal <- function(n, mu, Sigma) {
   d <- length(mu)   # The dimension d is the dimension of mu
   A <- t(chol(Sigma)) # Cholesky decomposition of Sigma. Transpose to get lower triangular
-  Z <- matrix(0, d, n)
-  for(i in 1:d) {   # Create d realizations of Normal(0, 1)
-    Z[i, ] <- std_normal(n)   # Put realizations of Normal(0, 1) in row of Z
-  }
+  z <- std_normal(d * n)    # Create vector of d*n independent Normal(0, 1)
+  Z <- matrix(z, nrow = d, ncol = n)    # Make z into (d X n) matrix Z
   X <- mu + A %*% Z   # X ~ Normal_d(mu, Sigma) 
   return(X)
 }
@@ -444,7 +442,6 @@ $$
 $$
 We then expect the sample mean and sample covariance matrix to be approximately equal to these. In the following code block we see that this is indeed the case.
 ```{r generate from d-variate normal example}
-
 # Sample
 n <- 1000000    # One million samples
 mu <- c(1, 7, 2)   # Create mu
