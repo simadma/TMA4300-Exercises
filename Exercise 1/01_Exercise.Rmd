@@ -23,6 +23,7 @@ knitr::opts_chunk$set(echo = TRUE, tidy = FALSE, message = FALSE, warning = FALS
 \newcommand{\Corr}{\operatorname{Corr}}
 \newcommand{\Exp}{\operatorname{Exp}}
 \newcommand{\Uniform}{\operatorname{Uniform}}
+\newcommand{\Betadist}{\operatorname{Beta}}
 \newcommand{\SD}{\operatorname{SD}}
 \newcommand{\RSS}{\mathrm{RSS}}
 \newcommand{\MSE}{\mathrm{MSE}}
@@ -222,21 +223,17 @@ k <- posterior_star_max / norm_const
 
 # Rejection sampling algorithm
 rejection_sampling <- function(M, y) {
-  n <- 10 * M   # Wish M samples from f, need to generate more from Unif(0, 1)
-  Theta <- runif(n)
-  U <- runif(n)
   count <- 0      # Count how many times the algorithm runs
   accept <- c()   # List of the accepted samples
   
   while(length(accept) < M) {
-    test_u <- U[count]
-    alpha <- posterior(Theta[count], y) / k
-    if(test_u <= alpha) {
-      accept <- rbind(accept, Theta[count])
-      count <- count + 1
-    } else {
-      count <- count + 1
+    U <- runif(1)
+    Theta <- runif(1)
+    alpha <- posterior(Theta, y) / k
+    if(U <= alpha) {
+      accept <- rbind(accept, Theta)
     }
+    count <- count + 1
   }
   return(list("accept" = accept, "co" = count))
 }
@@ -324,7 +321,17 @@ Theta_samp$co / M
 
 
 ## Subsection 4.
-...
+
+Here we wish to estimate $\mu$ as
+$$
+  \hat{\mu}_\mathrm{IS} = \frac{1}{n} \sum_{i=1}^n \Theta_i \frac{f(\Theta_i \mid \bfy)}{g(\Theta_i \mid \bfy)},
+$$
+where in this case $\Theta_1, \dots, \Theta_n \sim \Betadist(1, 5)$.
+
+
+```{r importance sampling}
+tmp <- 0
+```
 
 
 
