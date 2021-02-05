@@ -178,7 +178,7 @@ curve(dexp(x, rate = lambda),
 
 ## 1.
 
-Let $X\sim \operatorname{N}(0,1)$, and $\theta = \Pr(X > 4)$. Let also $h(x) = I(x > 4)$, where $I(\cdot)$ is the indicator function. Then
+Let $X\sim \operatorname{N}(0,1)$, and $\theta = \Pr(X > 4) \approx `r pnorm(4, lower.tail = FALSE)`$. Let also $h(x) = I(x > 4)$, where $I(\cdot)$ is the indicator function. Then
 $$
 \E[h(X)] = \int_{-\infty}^\infty h(x)f_X(x)\,dx = \int_{-\infty}^\infty I(x > 4) f_X(x)\,dx = \Pr(X>4) = \theta.
 $$
@@ -194,7 +194,7 @@ $$
 
 and sampling variance
 $$
-  \widehat{\Var}\left[\hat\theta_\mathrm{MC}\right] = \frac{1}{n^2}\sum_{i=1}^n\widehat{\Var}\left[h(X_i)\right]= \frac{1}{n}\widehat{\Var}[h(X)]=\frac{1}{n(n-1)}\sum_{i=1}^n\left(h(X_i) - \hat\theta_{MC}\right)^2.
+  \widehat{\Var}\left[\hat\theta_\mathrm{MC}\right] = \frac{1}{n^2}\sum_{i=1}^n\widehat{\Var}\left[h(X_i)\right]= \frac{1}{n}\widehat{\Var}[h(X)]=\frac{1}{n(n-1)}\sum_{i=1}^n\left(h(X_i) - \hat\theta_\mathrm{MC}\right)^2.
 $$
 
 Then the statistic
@@ -219,25 +219,127 @@ std_normal <- function(n) {
 #remove this------------------------------------------------------------------------------
 
 set.seed(321)
+theta <- pnorm(4, lower.tail = FALSE)
 n <- 100000
 x <- std_normal(n)
 h <- function(x) {
   1 * (x > 4)
 }
 
-theta_MC <- (1 / n) * sum(h(x))  # Monte Carlo estimate of Pr(X > 4)
+theta_MC <- sum(h(x)) / n  # Monte Carlo estimate of Pr(X > 4)
 
-sampl_var_theta_MC <- sum((h(x) - theta_MC)^2) / (n * (n - 1))  # Sampling variance
+sample_var_MC <- sum((h(x) - theta_MC)^2) / (n - 1)  # Sampling variance
 
 t <- qt(0.05/2, df = n - 1, lower.tail = FALSE)  # quantile with 5% significance level
-ci_MC <- theta_MC + t * sqrt(sampl_var_theta_MC) * c(-1, 1)  # Confidence Interval
+ci_MC <- theta_MC + t * sqrt(sample_var_MC / n) * c(-1, 1)  # Confidence Interval
 
-list(theta_MC = theta_MC, confint = ci_MC)
+# Result
+list(
+  theta_MC      = theta_MC,
+  sample_var_MC = sample_var_MC,
+  confint       = ci_MC,
+  error         = abs(theta_MC - theta)
+)
 ```
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## 2.
+We will sample from the proposal distribution
+$$
+  g_X(x) = \begin{cases}cx e^{-\frac{1}{2}x^2}, & x > 4 \\ 0, & \text{otherwise}.\end{cases}
+$$
+but first we must find the normalizing constant $c$.
+
+$$
+\begin{split}
+  c &= \left(\int_{4}^\infty x e^{-\frac{1}{2}x^2}\,dx\right)^{-1} 
+  = \left(\int_{\frac{1}{2}4^2}^\infty e^{-u}\,du\right)^{-1} 
+  = \left(e^{-\frac{1}{2}4^2} - 0\right)^{-1} 
+  = e^{\frac{1}{2}4^2}, \\
+  \Rightarrow g_X(x) &= \begin{cases}x e^{-\frac{1}{2}(x^2 - 4^2)}, & x > 4, \\ 0, & \text{otherwise}.\end{cases}
+\end{split}
+$$
+
+We can easily sample from the proposal distribution using inversion sampling. The cdf for $x>4$ is found by integrating.
+$$
+  G_X(x) = \int_4^x y e^{-\frac{1}{2}(y^2 - 4^2)}\,dy = \int_0^{\frac{1}{2}(x^2 - 4^2)}e^{-u}\,du = 1 - e^{-\frac{1}{2}(x^2 - 4^2)},\quad x> 4,
+$$
+and $G_X(x) = 0$ for $x \leq 4$. Let $U = G_X(X)\sim \Uniform(0, 1)$. Then we solve for $X$.
+$$
+\begin{split}
+  U &= 1 - e^{-\frac{1}{2}(X^2 - 4^2)} \\
+  -\frac{1}{2}(X^2 - 4^2) &= \log(1 - U) \\
+  X &= \sqrt{4^2 -2\log(1 - U)}, \quad U\sim \Uniform(0, 1).
+\end{split}
+$$
+
+Let $X_1,\ldots,X_n$ be a sample drawn from the proposal distribution $g_X(x)$. Then the importance sampling estimator of $\theta$ is given by
+$$
+  \hat\theta_\mathrm{IS} = \frac{1}{n}\sum_{i=1}^n h(X_i)w(X_i),
+$$
+where $w(x) = f_X(x)/g_X(x)$, with expectation
+
+$$
+\begin{split}
+\E\left[\hat\theta_\mathrm{IS}\right] &= \frac{1}{n}\sum_{i=1}^n\int_{0}^\infty h(x_i)w(x_i)g_X(x_i)\,dx_i \\
+&= \frac{1}{n}\sum_{i=1}^n\int_{0}^\infty h(x_i)f_X(x_i)\,dx_i \\
+&= \frac{1}{n}\sum_{i=1}^n\E\left[h(X_i)\mid X_i\sim \operatorname{N}(0, 1)\right] \\
+&= \frac{1}{n}\sum_{i=1}^n\theta \\
+&= \theta,
+\end{split}
+$$
+
+and sampling variance
+
+$$
+  \widehat{\Var}\left[\hat\theta_\mathrm{IS}\right] = \frac{1}{n^2}\sum_{i=1}^n\widehat{\Var}\left[h(X_i)w(X_i)\right]= \frac{1}{n}\widehat{\Var}[h(X)w(X)]=\frac{1}{n(n-1)}\sum_{i=1}^n\left(h(X_i)w(X_i) - \hat\theta_\mathrm{IS}\right)^2.
+$$
+```{r}
+set.seed(321)
+
+sample_from_proposal <- function(n) {
+  u <- runif(n)
+  sqrt(4^2 - 2 * log(1 - u))
+}
+
+n <- 100000
+x <- sample_from_proposal(n)
+
+w <- function(x) {
+  f <- dnorm(x)                              # target density
+  g <- ifelse(                               # proposal density
+         test = x > 4,
+         yes  = x * exp(-0.5 * (x^2 - 16)),
+         no   = 0
+       )
+  return(f / g)
+}
+
+hw <- h(x) * w(x)
+
+theta_IS <- sum(hw) / n  # Importance sampling estimate of Pr(X > 4)
+
+sample_var_IS <- sum((hw - theta_IS)^2) / (n - 1)  # Sampling variance
+
+t <- qt(0.05/2, df = n - 1, lower.tail = FALSE)  # quantile with 5% significance level
+ci_IS <- theta_IS + t * sqrt(sample_var_IS / n) * c(-1, 1)  # Confidence Interval
+
+# Result
+list(
+  theta_IS      = theta_IS,
+  sample_var_IS = sample_var_IS,
+  confint       = ci_IS,
+  error         = abs(theta_IS - theta)
+)
+```
+
+The number of samples $m$ needed for the simple Monte Carlo estimator to achieve the same precision as the importance sampling approach, we would need
+
+$$
+  m = n\frac{\widehat{\Var}[h(X)]}{\widehat{\Var}[h(X)w(X)]} = `r n`\frac{`r sample_var_MC`}{`r sample_var_IS`} = `r n * sample_var_MC / sample_var_IS`.
+$$
+That is, we need about $10$ million times more samples.
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
