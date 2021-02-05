@@ -53,6 +53,21 @@ library(ggplot2)  # Create Elegant Data Visualizations Using the Grammar of Grap
 #library(gridExtra)  # Mescellaneous Functions for "Grid" Graphics
 #library(GGally)  # Extension to 'ggplot2'
 ```
+```{r REMOVE THIS}
+#remove this------------------------------------------------------------------------------
+generate_from_exp <- function(n, rate = 1) {
+  Y <- runif(n)
+  X <- -(1 / rate) * log(Y)
+  return(X)
+}
+std_normal <- function(n) {
+  X1 <- pi * runif(n)   # n samples from Uniform(0, pi)
+  X2 <- generate_from_exp(n, 1/2)   # n samples from Exponential(1/2)
+  Z <- X2^(1/2) * cos(X1)   # Z ~ Normal(0, 1)
+  return(Z)
+}
+#-----------------------------------------------------------------------------------------
+```
 
 # Problem A: Stochastic simulation by the probability integral transform and bivariate techniques
 
@@ -204,20 +219,6 @@ $$
 and $t_{\alpha/2,\,n-1} = F_T^{-1}(1 - \alpha/2)$, where $F_T^{-1}(\cdot)$ is the quantile function of the $\mathrm{t}_{n-1}$ distribution.
 
 ```{r Monte Carlo integration}
-#remove this------------------------------------------------------------------------------
-generate_from_exp <- function(n, rate = 1) {
-  Y <- runif(n)
-  X <- -(1 / rate) * log(Y)
-  return(X)
-}
-std_normal <- function(n) {
-  X1 <- pi * runif(n)   # n samples from Uniform(0, pi)
-  X2 <- generate_from_exp(n, 1/2)   # n samples from Exponential(1/2)
-  Z <- X2^(1/2) * cos(X1)   # Z ~ Normal(0, 1)
-  return(Z)
-}
-#remove this------------------------------------------------------------------------------
-
 set.seed(321)
 theta <- pnorm(4, lower.tail = FALSE)
 n <- 100000
@@ -318,7 +319,7 @@ w <- function(x) {
 
 hw <- h(x) * w(x)
 
-theta_IS <- mean(hw)  # Importance sampling estimate of Pr(X > 4)
+theta_IS <- mean(hw)      # Importance sampling estimate of Pr(X > 4)
 sample_var_IS <- var(hw)  # Sampling variance
 
 t <- qt(0.05/2, df = n - 1, lower.tail = FALSE)  # quantile with 5% significance level
@@ -361,13 +362,28 @@ sample_from_proposal_mod <- function(n) {
 
 ### (b)
 
-```{r}
+```{r Antithetic sampling}
 set.seed(53)
 n <- 50000
 sample_pair <- sample_from_proposal_mod(n)
 
 hw1 <- h(sample_pair$x_1) * w(sample_pair$x_1)
 hw2 <- h(sample_pair$x_2) * w(sample_pair$x_2)
+hw_AS <- 0.5 * (hw1 + hw2)  # Antithetic sample
+
+theta_AS <- mean(hw_AS)      # Antithetic sampling estimate of Pr(X > 4)
+sample_var_AS <- var(hw_AS)  # Sampling variance
+
+t <- qt(0.05/2, df = n - 1, lower.tail = FALSE)  # quantile with 5% significance level
+ci_AS <- theta_AS + t * sqrt(sample_var_AS / n) * c(-1, 1)  # Confidence Interval
+
+# Result
+list(
+  theta_AS      = theta_AS,
+  sample_var_AS = sample_var_AS,
+  confint       = ci_AS,
+  error         = abs(theta_AS - theta)
+)
 ```
 
 
