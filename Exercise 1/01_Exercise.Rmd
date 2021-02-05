@@ -337,9 +337,9 @@ list(
 The number of samples $m$ needed for the simple Monte Carlo estimator to achieve the same precision as the importance sampling approach, we would need
 
 $$
-  m = n\frac{\widehat{\Var}[h(X)]}{\widehat{\Var}[h(X)w(X)]} = `r n`\frac{`r sample_var_MC`}{`r sample_var_IS`} = `r n * sample_var_MC / sample_var_IS`.
+  m = n\frac{\widehat{\Var}[h(X)]}{\widehat{\Var}[h(X)w(X)]} = `r n`\frac{`r sample_var_MC`}{`r sample_var_IS`} = `r n * sample_var_MC / sample_var_IS`,
 $$
-That is, we need about $10$ million times more samples.
+samples. That is, we need about $10$ million times more samples.
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
