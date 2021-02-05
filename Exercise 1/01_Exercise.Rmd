@@ -347,7 +347,7 @@ samples. That is, we need about $10$ million times more samples.
 ## 3.
 
 ### (a)
-We modify `sample_from_proposal()` to return a pair of samples, where one uses $U\sim\Uniform(0,1)$ as argument and the other uses $1 - U$ as argument.
+We modify `sample_from_proposal()` to return a pair of samples, where one takes $U\sim\Uniform(0,1)$ as argument and the other $1 - U$ as argument.
 
 ```{r Proposal function modified}
 sample_from_proposal_mod <- function(n) {
@@ -361,6 +361,8 @@ sample_from_proposal_mod <- function(n) {
 
 
 ### (b)
+
+
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
