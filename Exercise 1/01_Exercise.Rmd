@@ -203,7 +203,7 @@ $$
 $$
 and $t_{\alpha/2,\,n-1} = F_T^{-1}(1 - \alpha/2)$, where $F_T^{-1}(\cdot)$ is the quantile function of the $\mathrm{t}_{n-1}$ distribution.
 
-```{r}
+```{r Monte Carlo integration}
 #remove this------------------------------------------------------------------------------
 generate_from_exp <- function(n, rate = 1) {
   Y <- runif(n)
@@ -295,7 +295,7 @@ and sampling variance
 $$
   \widehat{\Var}\left[\hat\theta_\mathrm{IS}\right] = \frac{1}{n^2}\sum_{i=1}^n\widehat{\Var}\left[h(X_i)w(X_i)\right]= \frac{1}{n}\widehat{\Var}[h(X)w(X)]=\frac{1}{n(n-1)}\sum_{i=1}^n\left(h(X_i)w(X_i) - \hat\theta_\mathrm{IS}\right)^2.
 $$
-```{r}
+```{r Importance Sampling}
 set.seed(321)
 
 sample_from_proposal <- function(n) {
@@ -347,6 +347,18 @@ samples. That is, we need about $10$ million times more samples.
 ## 3.
 
 ### (a)
+We modify `sample_from_proposal()` to return a pair of samples, where one uses $U\sim\Uniform(0,1)$ as argument and the other uses $1 - U$ as argument.
+
+```{r Proposal function modified}
+sample_from_proposal_mod <- function(n) {
+  u <- runif(n)
+  list(
+    x_1 = sqrt(4^2 - 2 * log(1 - u)),
+    x_2 = sqrt(4^2 - 2 * log(u))
+  )
+}
+```
+
 
 ### (b)
 
