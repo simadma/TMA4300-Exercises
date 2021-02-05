@@ -178,6 +178,62 @@ curve(dexp(x, rate = lambda),
 
 ## 1.
 
+Let $X\sim \operatorname{N}(0,1)$, and $\theta = \Pr(X > 4)$. Let also $h(x) = I(x > 4)$, where $I(\cdot)$ is the indicator function. Then
+$$
+\E[h(X)] = \int_{-\infty}^\infty h(x)f_X(x)\,dx = \int_{-\infty}^\infty I(x > 4) f_X(x)\,dx = \Pr(X>4) = \theta.
+$$
+
+Let $X_1,\ldots X_n\sim\operatorname{N}(0,1)$ be a sample. Then the simple Monte Carlo estimator of $\theta$ is
+$$
+  \hat\theta_{\mathrm{MC}} = \frac{1}{n}\sum_{i=1}^n h(X_i),
+$$
+with expectation
+$$
+  \E\left[\hat\theta_\mathrm{MC}\right] = \frac{1}{n}\sum_{i=1}^n\E\left[h(X_i)\right] = \frac{1}{n}\sum_{i=1}^n\theta = \theta,
+$$
+
+and sampling variance
+$$
+  \widehat{\Var}\left[\hat\theta_\mathrm{MC}\right] = \frac{1}{n^2}\sum_{i=1}^n\widehat{\Var}\left[h(X_i)\right]= \frac{1}{n}\widehat{\Var}[h(X)]=\frac{1}{n(n-1)}\sum_{i=1}^n\left(h(X_i) - \hat\theta_{MC}\right)^2.
+$$
+
+Then the statistic
+$$
+  T = \frac{\hat\theta_\mathrm{MC} - \theta}{\sqrt{\widehat{\Var}\left[\hat\theta_\mathrm{MC}\right]}}\sim\mathrm t_{n - 1},
+$$
+and $t_{\alpha/2,\,n-1} = F_T^{-1}(1 - \alpha/2)$, where $F_T^{-1}(\cdot)$ is the quantile function of the $\mathrm{t}_{n-1}$ distribution.
+
+```{r}
+#remove this------------------------------------------------------------------------------
+generate_from_exp <- function(n, rate = 1) {
+  Y <- runif(n)
+  X <- -(1 / rate) * log(Y)
+  return(X)
+}
+std_normal <- function(n) {
+  X1 <- pi * runif(n)   # n samples from Uniform(0, pi)
+  X2 <- generate_from_exp(n, 1/2)   # n samples from Exponential(1/2)
+  Z <- X2^(1/2) * cos(X1)   # Z ~ Normal(0, 1)
+  return(Z)
+}
+#remove this------------------------------------------------------------------------------
+
+set.seed(321)
+n <- 100000
+x <- std_normal(n)
+h <- function(x) {
+  1 * (x > 4)
+}
+
+theta_MC <- (1 / n) * sum(h(x))  # Monte Carlo estimate of Pr(X > 4)
+
+sampl_var_theta_MC <- sum((h(x) - theta_MC)^2) / (n * (n - 1))  # Sampling variance
+
+t <- qt(0.05/2, df = n - 1, lower.tail = FALSE)  # quantile with 5% significance level
+ci_MC <- theta_MC + t * sqrt(sampl_var_theta_MC) * c(-1, 1)  # Confidence Interval
+
+list(theta_MC = theta_MC, confint = ci_MC)
+```
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
