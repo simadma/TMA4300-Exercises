@@ -164,19 +164,7 @@ library(ggplot2)  # Create Elegant Data Visualizations Using the Grammar of Grap
 # Problem D: Rejection sampling and importance sampling
 
 ## Subproblem 1.
-We consider a vector of multinomially distributed counts
-$$
-  \bfy =
-  \begin{bmatrix}
-    y_1 \\ y_2 \\ y_3 \\ y_4
-  \end{bmatrix}
-  \quad \text{with probabilities} \quad
-  \mathbf{p} =
-  \begin{bmatrix}
-    \frac 1 2 + \frac \theta 4 \\ \frac{1-\theta}{4} \\ \frac{1-\theta}{4} \\ \frac \theta 4
-  \end{bmatrix},
-$$
-and the observed data is $\bfy = \begin{bmatrix} 125 & 18 & 20 & 34 \end{bmatrix}^\top$. The multinomial mass function is given as
+We consider a vector of multinomially distributed counts $\bfy = \begin{bmatrix} y_1 & y_2 & y_3 & y_4 \end{bmatrix}^\top$ and the observed data is $\bfy = \begin{bmatrix} 125 & 18 & 20 & 34 \end{bmatrix}^\top$. The multinomial mass function is given as
 $$
   f(\bfy \mid \theta) \propto (2+\theta)^{y_1} (1-\theta)^{y_2+y_3} \theta^{y_3},
 $$
@@ -322,19 +310,77 @@ Theta_samp$co / M
 
 ## Subsection 4.
 
-Here we wish to estimate $\mu$ as
+We now assume a $\Betadist(1, 5)$ prior
 $$
-  \hat{\mu}_\mathrm{IS} = \frac{1}{n} \sum_{i=1}^n \Theta_i \frac{f(\Theta_i \mid \bfy)}{g(\Theta_i \mid \bfy)},
+  \tilde{f}(\theta) = \frac{1}{\mathrm{B}(1, 5)} (1 - \theta)^4 \propto (1 - \theta)^4,
 $$
-where in this case $\Theta_1, \dots, \Theta_n \sim \Betadist(1, 5)$.
-
+where $\mathrm{B}(\cdot, \cdot)$ is the beta function. This gives the posterior
+$$
+  \tilde{f}(\theta \mid \bfy) \propto f(\bfy \mid \theta) \tilde{f}(\theta) \propto \tilde{f}^*(\theta \mid \bfy) := (2 + \theta)^{y_1} (1 - \theta)^{y_2 + y_3 + 4} \theta^{y_4}.
+$$
+We wish to estimate $\mu$ by importance sampling, and to avoid needing to know the normalizing constant, we use the self-normalizing importance sampling estimator
+$$
+  \tilde{\mu}_\mathrm{IS} = \frac{\sum_{i=1}^n \Theta_i w(\Theta_i)}{\sum_{i=1}^n w(\Theta_i)},
+$$
+where
+$$
+  w(\Theta_i) = \frac{\tilde{f}^*(\Theta_i \mid \bfy)}{f^*(\Theta_i)} = (1 - \Theta_i)^4.
+$$
+In the limit $n \to \infty$, the estimator $\tilde{\mu}_\mathrm{IS}$ is unbiased. Here $\Theta_1, \dots, \Theta_n \sim f(\theta \mid \bfy)$.
 
 ```{r importance sampling}
-tmp <- 0
+set.seed(69)
+
+posterior_tilde_star <- function(theta, y) {
+  return((2 + theta)^(y[1]) * (1 - theta)^(y[2] + y[3] + 4) * theta^(y[4]))
+}
+
+importance_sampling <- function(n, y) {
+  Theta <- rejection_sampling(n, y)$accept
+  w <- (1 - Theta)^4
+  importance_mean <- sum(Theta * w) / sum(w)
+  return(importance_mean)
+}
+
+# Test
+n <- 10000
+y <- c(125, 18, 20, 34)   # Observed data
+
+mu_is <- importance_sampling(n, y)
+mu_is
+
+# True mean
+const <- integrate(function(theta)(posterior_tilde_star(theta, y)),
+                   lower = 0,
+                   upper = 1)$value
+true_mu <- integrate(function(theta)(theta * posterior_tilde_star(theta, y) / const),
+                     lower = 0,
+                     upper = 1)$value
+true_mu
+
 ```
 
+We then see that the estimated $\tilde{\mu}_\mathrm{IS} \approx 0.5948$, while the true posterior mean is $\mu \approx 0.5959$. We notice that $\tilde{\mu}_\mathrm{IS} < \hat{\mu}$, as found in Subproblem 2. This can be explained by looking at the priors. The previous prior $\Betadist(1, 1)$ and the new prior $\Betadist(1, 5)$ are shown in Figure \ref{fig:priors}. From this it is clear that the $\Betadist(1, 5)$ prior favors lower values for $\theta$ compared to the uniform prior, which do not favor any particular $\theta$. It is therefore expected that $\tilde{\mu}_\mathrm{IS} < \hat{\mu}$, which is shown to be true.
 
-
+```{r priors, fig.cap = "\\label{fig:priors}The two priors $\\Betadist(1, 1)$ and $\\Betadist(1, 5)$."}
+ggplot() +
+  stat_function(
+    fun = dbeta,
+    args = list(shape1 = 1, shape2 = 1),
+    aes(col = "Beta(1, 1)")
+  ) +
+  stat_function(
+    fun = dbeta,
+    args = list(shape1 = 1, shape2 = 5),
+    aes(col = "Beta(1, 5)")
+  ) +
+  ggtitle("The different priors") +
+  xlab("theta") +
+  ylab("Density") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(legend.title = element_blank())
+```
 
 
 
