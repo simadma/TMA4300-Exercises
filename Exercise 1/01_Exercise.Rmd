@@ -78,18 +78,18 @@ It is clear that if $U \sim \Uniform(0, 1)$, then $1 - U \sim \Uniform(0, 1)$, a
 Thus, we sample $Y$ from `runif()` and transform it using Equation \eqref{eq:exp_transf}, to sample from the exponential distribution. Figure \ref{fig:exp_hist} shows one million samples drawn from the `generate_from_exp()` function defined in the code chunk below. It also shows the theoretical PDF of the exponential distribution with rate parameter $\lambda = 2$.
 
 ```{r generate from exp, fig.cap = "\\label{fig:exp_hist}Normalized histogram of one million samples drawn from the exponential distribution, together with the theoretical PDF, with $\\lambda = 2$."}
-#set.seed(123)
+set.seed(69)
 
-generate_from_exp <- function(n, rate = 1) {
-  Y <- runif(n)
-  X <- -(1 / rate) * log(Y)
+generate_from_exp <- function(n, rate) {
+  Y <- runif(n)   # Generate n Uniform(0, 1) variables
+  X <- -(1 / rate) * log(Y)   # Transformation
   return(X)
 }
 
 # sample
 n <- 1000000  # One million samples
 lambda <- 2
-exp_samp <- generate_from_exp(n, rate = lambda)
+exp_samp <- generate_from_exp(n, lambda)
 
 # plot
 ggplot() +
@@ -193,6 +193,7 @@ for $\alpha \in (0, 1)$.
 Using what we found in (a) we may use the inversion method to sample from $g(x)$ given in Equation \eqref{eq:gx}, as shown in the code block beneath. Figure \ref{fig:g_hist} shows one million samples drawn from `generate_from_gx()` and also the theoretical PDF.
 
 ```{r generate from gx, fig.cap = "\\label{fig:g_hist}Normalized histogram of one million samples drawn from $g(x)$ given in Equation \\eqref{eq:gx}, together with the theoretical PDF, with $\\alpha = 0.75$."}
+set.seed(69)
 
 generate_from_gx <- function(n, alpha) {
   U <- runif(n)   # Generate n Uniform(0, 1) variables
@@ -346,7 +347,7 @@ Letting $X \sim f(x)$ we may find the expected value to be
 $$
   \E(X) = \int_\mathbb{R} xf(x) \,\mathrm{d}x = \int_\mathbb{R} \frac{\alpha x \e^{\alpha x}}{(1 + \e^{\alpha x})^2} \,\mathrm{d}x = 0,
 $$
-because of symmetry. This is confirmed in the following code block where we see that the sample mean is approximately zero. This also holds for all $\alpha > 0$.
+because of symmetry. This is confirmed in the following code block where we see that the sample mean is approximately zero, and can also be seen from the figure. This holds for all $\alpha > 0$.
 ```{r, eval = TRUE}
 mean(fx_samp)
 ```
@@ -441,12 +442,12 @@ $$
   \end{bmatrix}.
 $$
 We then expect the sample mean and sample covariance matrix to be approximately equal to these. In the following code block we see that this is indeed the case.
-```{r generate from d-variate normal example}
+```{r, eval = TRUE}
 # Sample
 n <- 1000000    # One million samples
 mu <- c(1, 7, 2)   # Create mu
 Sigma <- matrix(c(2, -1, 0, -1, 2, -1, 0, -1, 2), nrow = 3)    # Create Sigma
-normal <- d_variate_normal(n, mu, Sigma)    # Sample from d-variate normal
+normal <- d_variate_normal(n, mu, Sigma)    # Sample from d-variate Normal(mu, Sigma)
 
 # Test
 rowMeans(normal)  # Finding the mean of the rows of normal, sample mean
