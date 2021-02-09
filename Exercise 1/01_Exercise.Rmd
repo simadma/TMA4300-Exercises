@@ -449,9 +449,9 @@ cov(t(normal))    # Transpose because we want with respect to the rows
 
 # Problem B: The gamma distribution
 
-## 1.
+## Subproblem 1.
 
-### (a)
+### Subsubproblem (a)
 
 Let $f(x)$ be the target distribution we wish to sample from, and let $g(x)$ be the proposal distribution. For the rejection sampling algorithm, we require that
 \begin{equation}\label{eq:rej_samp}
@@ -494,7 +494,7 @@ $$
 $$
 
 
-### (b)
+### Subsubproblem (b)
 Figure \ref{fig:gamma_rej} shows a sample drawn from the Gamma distribution using the rejection sampling method.
 
 ```{r gamma rejection sampling, fig.cap = "\\label{fig:gamma_rej}Normalized histogram of a hundred thousand samples drawn from $\\operatorname{Gamma}(\\alpha = 0.7, \\beta = 1)$ using rejection sampling, together with the theoretical density function."}
@@ -554,9 +554,9 @@ and see that it corresponds well to the true values.
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
-## 2.
+## Subproblem 2.
 
-### (a)
+### Subsubroblem (a)
 We will now use the ratio-of-uniforms method to simulate from $\operatorname{Gamma}(\alpha,\beta = 1)$. Additionally we have $\alpha>1$ this time. Let us define
 \begin{equation}\label{eq:rat-of-uni}
   C_f = \left\{(x_1, x_2) : 0 \leq x_1 \leq \sqrt{f^*\left(\frac{x_2}{x_1}\right)}\right\}, \quad \text{where} \quad f^*(x) = \begin{cases}
@@ -607,7 +607,7 @@ Finally, we have that
   b_- = -\sqrt{\sup_{x\leq 0}(x^2\cdot 0)} = 0.
 \end{equation}
 
-### (b)
+### Subsubproblem (b)
 
 To avoid producing `NaNs`, we will implement the ratio-of-uniform method on a log scale.
 We get the following log-transformations.
@@ -715,7 +715,7 @@ Figure \ref{fig:gamma-trials} strongly suggests that the acceptance probability 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
-## 3.
+## Subproblem 3.
 
 Since $\beta$ is an inverse scale parameter, we can simply draw samples from $\operatorname{Gamma}(\alpha, 1)$ and divide every sample by $\beta$. This can be shown by looking at the mgf of $X/\beta$ where $X\sim \operatorname{Gamma}(\alpha, 1)$.
 
@@ -765,9 +765,9 @@ The table shows that the expectation and variance corresponds well with the samp
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
-## 4.
+## Subproblem 4.
 
-### (a)
+### Subsubproblem (a)
 Let $X$ and $Y$ be independent random variables where $X\sim\operatorname{Gamma}(\alpha, 1)$ and $Y\sim\operatorname{Gamma}(\beta, 1)$. Let
 $$
 z = g_1(x, y) = \frac{x}{x + y} \quad \text{and}\quad w = g_2(x, y) = x + y
@@ -802,7 +802,7 @@ That is,
 \end{equation}
 
 
-### (b)
+### Subsubproblem (b)
 
 Figure \ref{fig:beta} shows a sample drawn from the beta distribution, with help from `sample_from_gamma()` using \eqref{eq:beta}.
 ```{r beta sample, fig.cap = "\\label{fig:beta}Normalized histogram of a hundred thousand observations drawn from $\\operatorname{Beta}(\\alpha = 2, \\beta = 5)$."}
@@ -850,7 +850,7 @@ and we see that it corresponds well to the theoretical values.
 
 # Problem C: Monte Carlo integration and variance reduction
 
-## 1.
+## Subproblem 1.
 
 Let $X\sim \operatorname{N}(0,1)$, and $\theta = \Pr(X > 4) \approx `r pnorm(4, lower.tail = FALSE)`$. Let also $h(x) = I(x > 4)$, where $I(\cdot)$ is the indicator function. Then
 $$
@@ -908,7 +908,7 @@ list(
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
-## 2.
+## Subproblem 2.
 We will sample from the proposal distribution
 $$
   g_X(x) = \begin{cases}cx e^{-\frac{1}{2}x^2}, & x > 4 \\ 0, & \text{otherwise}.\end{cases}
@@ -1013,9 +1013,9 @@ samples. That is, we need about $10$ million times more samples.
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
-## 3.
+## Subproblem 3.
 
-### (a)
+### Subsubproblem (a)
 We modify `sample_from_proposal()` to return a pair of samples, where one takes $U\sim\Uniform(0,1)$ as argument and the other $1 - U$ as argument.
 
 Let $X_1^{(1)},\ldots X_n^{(1)}$ and $X_1^{(2)},\ldots,X_n^{(2)}$ be a such sample pair drawn from the proposal distribution, with the importance sampling estimators being
@@ -1057,7 +1057,7 @@ sample_from_proposal_mod <- function(n) {
 ```
 
 
-### (b)
+### Subsubproblem (b)
 
 ```{r Antithetic sampling}
 set.seed(53)
