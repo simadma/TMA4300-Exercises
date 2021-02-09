@@ -4,6 +4,7 @@ author: "Mads Adrian Simonsen, William Scott Grundeland Olsen"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
   pdf_document: default
+  github_document: default
   html_document:
     df_print: paged
 subtitle: TMA4300 Computer Intensive Statistical Models
@@ -40,22 +41,7 @@ knitr::opts_chunk$set(echo = TRUE, tidy = FALSE, message = FALSE, warning = FALS
 
 
 ```{r libraries, eval = TRUE, echo = FALSE}
-library(ggplot2)  # Create Elegant Data Visualizations Using the Grammar of Graphics
-#library(ISLR)  # Data from the book ISLR
-#library(boot)  # Bootstrap Functions
-#library(MASS)  # Support Functions and Datasets for Venables and Ripley's MASS
-#library(FactoMineR)  # Multivariate Exploratory Data Analysis and Data Mining
-#library(factoextra)  # Extract and Visualize the Results of Multivariate Data Analyses
-#library(ggfortify)  # Data Visualization Tools for Statistical Analysis Results
-#library(glmnet)  # Lasso and Elastic-Net Regularized Generalized Linear Models
-#library(tree)  # Classification and Regression Trees
-#library(randomForest)  # Breiman and Cutler's Random Forests for Classif. and Regress.
-#library(gbm)  # Generalized Boosted Regression Models
-#library(keras)  # R Interface to 'Keras'
-#library(pls)  # Partial Least Squares and Principal Component Regression
-#library(gam)  # Generalized Additive Models
-#library(gridExtra)  # Mescellaneous Functions for "Grid" Graphics
-#library(GGally)  # Extension to 'ggplot2'
+library(tidyverse)
 ```
 
 # Problem A: Stochastic simulation by the probability integral transform and bivariate techniques
@@ -92,6 +78,7 @@ generate_from_exp <- function(n, rate) {
 n <- 1000000  # One million samples
 lambda <- 2
 exp_samp <- generate_from_exp(n, lambda)
+
 
 # plot
 ggplot() +
@@ -466,7 +453,103 @@ cov(t(normal))    # Transpose because we want with respect to the rows
 
 ### (a)
 
+Let $f(x)$ be the target distribution we wish to sample from, and let $g(x)$ be the proposal distribution. For the rejection sampling algorithm, we require that
+\begin{equation}\label{eq:rej_samp}
+  f(x) \leq c\cdot g(x),\quad\forall x\in\mathbb R,
+\end{equation}
+for some constant $c>0$. Let $X$ and $U$ be independent samples where $X \sim g(x)$ and $U \sim \Uniform(0, 1)$. Then the acceptance probability is
+$$
+\begin{split}
+  \Pr\left(U\leq\frac{f(X)}{c\cdot g(X)}\right) &= \int_{-\infty}^\infty\int_{0}^{f(x)/(c\ g(x))}f_{X,U}(x, u)\,du\,dx \\
+  &= \int_{-\infty}^\infty\int_{0}^{f(x)/(c\ g(x))}g(x)\cdot 1\,du\,dx \\
+  &= \int_{-\infty}^\infty\frac{f(x)}{c\ g(x)}g(x)\,dx \\
+  &= \frac{1}{c}\int_{-\infty}^\infty f(x)\,dx \\
+  &= \frac{1}{c}
+\end{split}
+$$
+
+We wish to sample from $\operatorname{Gamma}(\alpha, \beta = 1)$, using the proposal distribution $g(x)$ given in \eqref{eq:gx}. We want to choose $c$ such that the acceptance probability is maximized while \eqref{eq:rej_samp} is satisfied. We must check three cases. The trivial case when $x\leq 0$, we have $f(x) = g(x) = 0$ so \eqref{eq:rej_samp} is satisfied for all $c$. When $0<x<1$ we have
+
+$$
+\begin{split}
+  f(x) &\leq c\,g(x) \\
+  \frac{1}{\Gamma(\alpha)}x^{\alpha - 1}e^{-x} &\leq c\,\frac{1}{\alpha^{-1} + e^{-1}}x^{\alpha - 1} \\
+  c&\geq \left(\frac{1}{\alpha} + \frac{1}{e}\right)\frac{1}{\Gamma(\alpha)}e^{-x} \\
+  c&\geq \left(\frac{1}{\alpha} + \frac{1}{e}\right)\frac{1}{\Gamma(\alpha)}.
+\end{split}
+$$
+
+The last case, when $x\geq 1$, we have
+$$
+\begin{split}
+  f(x) &\leq c\,g(x) \\
+  \frac{1}{\Gamma(\alpha)}x^{\alpha - 1}e^{-x} &\leq c\,\frac{1}{\alpha^{-1} + e^{-1}}e^{-x} \\
+  c&\geq \left(\frac{1}{\alpha} + \frac{1}{e}\right)\frac{1}{\Gamma(\alpha)}x^{\alpha - 1} \\
+  c&\geq \left(\frac{1}{\alpha} + \frac{1}{e}\right)\frac{1}{\Gamma(\alpha)}.
+\end{split}
+$$
+That is, we choose $c := (\alpha^{-1} + e^{-1})/\Gamma(\alpha)$, such that the acceptance probability becomes
+$$
+\Pr\left(U\leq\frac{f(X)}{c\cdot g(X)}\right) = \frac{1}{c} = \frac{\Gamma(\alpha)}{\alpha^{-1} + e^{-1}},\quad \alpha\in(0, 1).
+$$
+
+
 ### (b)
+Figure \ref{fig:gamma_rej} shows a sample drawn from the Gamma distribution using the rejection sampling method.
+
+```{r gamma rejection sampling, fig.cap = "\\label{fig:gamma_rej}Normalized histogram of a hundred thousand samples drawn from $\\operatorname{Gamma}(\\alpha = 0.7, \\beta = 1)$ using rejection sampling, together with the theoretical density function."}
+set.seed(137)
+
+# Samples from the gamma distribution using rejection sampling with rate parameter = 1
+# n:     number of observations
+# shape: shape parameter, must be between 0 and 1
+sample_from_gamma_rej <- function(n, shape = 0.5) {
+  c <- (1 / shape + 1 / exp(1)) / gamma(shape)    # constant that minimizes the envelope
+  x <- vector(mode = "numeric", length = n)       # sample vector initialized
+  for (i in 1:n) {
+    repeat {
+      x[i] <- generate_from_gx(1, alpha = shape)  # draw from proposal
+      u <- runif(1)                               # draw from U(0, 1)
+      f <- dgamma(x[i], shape = shape)            # target value
+      g <- theo_gx(x[i], alpha = shape)           # proposal value
+      alpha <- (1 / c) * (f / g)                  # acceptance threshold
+      if (u <= alpha) {
+        break
+      }
+    }
+  }
+  return(x)
+}
+
+# Sample
+n <- 100000  # Hundred thousand observations
+alpha <- 0.7
+x <- sample_from_gamma_rej(n, shape = alpha)
+
+# Plot
+ggplot() +
+  geom_histogram(
+    mapping = aes(x, after_stat(density)),
+    breaks  = seq(0, max(x), by = 0.1)
+  ) +
+   geom_function(
+     mapping = aes(color = "Theoretical density"),
+     fun     = dgamma,
+     n       = 1001,
+     args    = list(shape = alpha),
+   ) +
+   coord_cartesian(
+     xlim = c(0, 4),
+     ylim = c(0, 2.5)
+   ) +
+  theme_minimal()
+```
+
+The expectation and variance of $X\sim\operatorname{Gamma}(\alpha = `r alpha`,\beta = 1)$ is $\E[X] = \alpha/\beta = `r alpha`$ and $\Var[x] = \alpha/\beta^2  = `r alpha`$. We compare with the sample mean and sample variance,
+```{r gamma sample mean and variance}
+list(sample_mean = mean(x), sample_variance = var(x))
+```
+and see that it corresponds well to the true values.
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
@@ -474,32 +557,292 @@ cov(t(normal))    # Transpose because we want with respect to the rows
 ## 2.
 
 ### (a)
+We will now use the ratio-of-uniforms method to simulate from $\operatorname{Gamma}(\alpha,\beta = 1)$. Additionally we have $\alpha>1$ this time. Let us define
+\begin{equation}\label{eq:rat-of-uni}
+  C_f = \left\{(x_1, x_2) : 0 \leq x_1 \leq \sqrt{f^*\left(\frac{x_2}{x_1}\right)}\right\}, \quad \text{where} \quad f^*(x) = \begin{cases}
+           x^{\alpha - 1}e^{-x}, & x > 0,\\
+           0, & \text{otherwise},
+  \end{cases}
+\end{equation}
+
+and
+
+\begin{equation}\label{eq:rat-bounds}
+a = \sqrt{\sup_x f^*(x)},\quad b_+ = \sqrt{\sup_{x\geq 0}(x^2 f^*(x))}\quad \text{and}\quad b_- = -\sqrt{\sup_{x\leq 0}(x^2 f^*(x))},
+\end{equation}
+
+such that $C_f\subset[0,1]\times[b_-, b_+]$.
+
+First we find $\sup_x f^*(x)$. This must be when $x>0$. We differentiate $f^*(x)$ and setting the expression equal to zero to find the stationary point.
+$$
+\begin{split}
+  0 &= \frac{d}{dx} f^*(x) \\
+  &= \frac{d}{dx} x^{\alpha - 1}e^{-x} \\
+  &= e^{-x}x^{\alpha - 2}\left((\alpha - 1) - x\right) \\
+  \Rightarrow\quad x &= \alpha - 1,\quad \text{where}\quad\alpha > 1.
+\end{split}
+$$
+Since we have only one stationary point, $f^*(x)$ is continuous, $f^*(x) > 0\ \forall x>0$ and $\lim_{x\to0+}f^*(x) = \lim_{x\to\infty}f^*(x) = 0$, then $x = \alpha - 1$ must be the global maximum point. That is
+\begin{equation}\label{eq:rat-a}
+ a = \sqrt{f^*(\alpha - 1)} = \sqrt{(\alpha - 1)^{\alpha - 1}e^{-(\alpha - 1)}} = \left(\frac{\alpha - 1}{e}\right)^{(\alpha - 1)/2}.
+\end{equation}
+
+We now wish to find $b_+$.
+
+$$
+\begin{split}
+  0 &= \frac{d}{dx} x^2f^*(x) \\
+  &= \frac{d}{dx} x^{\alpha + 1}e^{-x} \\
+  &= e^{-x}x^{\alpha}\left((\alpha + 1) - x\right) \\
+  \Rightarrow\quad x &= \alpha + 1,\quad \text{where}\quad\alpha > 1.
+\end{split}
+$$
+Using the same reasoning as for $a$, we have that $x = \alpha + 1$ is a global maximum point for $x^2f^*(x)$. Then
+\begin{equation}\label{eq:rat-b_plus}
+  b_+ = \sqrt{(\alpha + 1)^2 f^*(\alpha + 1)} = \sqrt{(\alpha + 1)^{\alpha + 1}e^{-(\alpha + 1)}} = \left(\frac{\alpha + 1}{e}\right)^{(\alpha + 1)/2}.
+\end{equation}
+
+Finally, we have that
+\begin{equation}\label{eq:rat-b_minus}
+  b_- = -\sqrt{\sup_{x\leq 0}(x^2\cdot 0)} = 0.
+\end{equation}
 
 ### (b)
+
+To avoid producing `NaNs`, we will implement the ratio-of-uniform method on a log scale.
+We get the following log-transformations.
+$$
+\begin{split}
+  X_1\sim \Uniform(0, a)&\Rightarrow \log X_1 = \log a + \log U_1,\quad U_1\sim\Uniform(0,1); \\
+  X_2\sim \Uniform(b_-=0, b_+ = b) &\Rightarrow \log X_2 = \log b + \log U_2,\quad U_2\sim\Uniform(0,1); \\
+  y = \frac{x_2}{x_1} &\Rightarrow y = \exp\{(\log x_2) - (\log x_1)\}; \\
+  0\leq x_1\leq \sqrt{f^*(y)} &\Rightarrow \log x_1 \leq \frac{1}{2}\log f^*(y); \\
+  f^*(y) = \begin{cases}y^{\alpha - 1}e^{-y},&y>0, \\ 0, &\text{otherwise},\end{cases} &\Rightarrow \log f^*(y) = \begin{cases}(\alpha - 1)\log y - y,&y>0, \\ -\infty, &\text{otherwise.}\end{cases}
+\end{split}
+$$
+
+Figure \ref{fig:gamma-rou} shows a sample drawn from the Gamma distribution using the ratio-of-uniform method.
+
+```{r gamma ratio-of-uniform method, fig.cap = "\\label{fig:gamma-rou}Normalized histogram of ten thousand samples drawn from $\\operatorname{Gamma}(\\alpha = 487.9, \\beta = 1)$ using the ratio-of-uniform method, together with the theoretical density function."}
+set.seed(434)
+
+# Calculates the logarithmic core of the Gamma(shape = alpha, rate = 1) pdf
+# x:      x value(s)
+# alpha:  shape parameter
+lgamma_core <- function(x, alpha = 2) {
+  ifelse(
+    test = x <= 0,
+    yes  = -Inf,
+    no   = (alpha - 1)*log(x) - x
+  )
+}
+
+# Samples from the Gamma distribution using the ratio-of-uniform method
+# n:              number of samples
+# shape:          shape parameter
+# include_trials: if TRUE, the number of trials will also be returned
+sample_from_gamma_rou <- function(n, shape = 2, include_trials = FALSE) {
+  log_a <- ((shape - 1) / 2) * (log(shape - 1) - 1)
+  log_b <- ((shape + 1) / 2) * (log(shape + 1) - 1)
+  trials <- 0
+  y <- vector(mode = "numeric", length = n)
+  for (i in 1:n) {
+    repeat {
+      log_x1 <- log_a + log(runif(1))            # draw log x_1, where x_1 ~ U(0, a)
+      log_x2 <- log_b + log(runif(1))            # draw log x_2, where x_2 ~ U(0, b)
+      y[i] <- exp(log_x2 - log_x1)               # ratio x_2 / x_1
+      log_f <- lgamma_core(y[i], alpha = shape)  # log f*(x_2 / x_1)
+      if (log_x1 <= 0.5 * log_f) {
+        break
+      } else {
+        trials <- trials + 1
+      }
+    }
+  }
+  if (include_trials) {
+    return(list(x = y, trials = trials))
+  }
+  return(y)
+}
+
+# Sample
+n <- 10000  # Ten thousand observations
+alpha <- 487.9
+x <- sample_from_gamma_rou(n, shape = alpha)
+
+# Plot
+ggplot() +
+  geom_histogram(
+    mapping = aes(x, after_stat(density)),
+    bins = 50
+  ) +
+  geom_function(
+    mapping = aes(color = "Theoretical density"),
+    fun     = dgamma,
+    n       = 1001,
+    args    = list(shape = alpha),
+  ) +
+  theme_minimal()
+```
+
+The expectation and variance of $X\sim\operatorname{Gamma}(\alpha = `r alpha`,\beta = 1)$ is $\E[X] = \alpha/\beta = `r alpha`$ and $\Var[x] = \alpha/\beta^2  = `r alpha`$. We compare with the sample mean and sample variance,
+```{r gamma sample mean and variance 2}
+list(sample_mean = mean(x), sample_variance = var(x))
+```
+and see that they are close to the true values.
+
+```{r compare number of trials for each alpha, fig.cap = "\\label{fig:gamma-trials}Number of trials before accepting $N = 1000$ simulations for various shape parameters ($\\alpha$) using the ratio-of-uniform method."}
+set.seed(515)
+
+# Sample 1000 observations for each alpha and record number of trials
+n <- 1000
+m <- 50
+alpha <- seq(2, 2000, length.out = m)
+trials <- vector(mode = "integer", length = m)  # vector to store number of trials
+
+for (i in 1:m) {
+  trials[i] <- sample_from_gamma_rou(n, alpha[i], include_trials = TRUE)$trials
+}
+
+# Plot
+ggplot(mapping = aes(alpha, trials)) +
+  geom_point() +
+  theme_minimal()
+```
+
+Figure \ref{fig:gamma-trials} strongly suggests that the acceptance probability decreases with increasing $\alpha$. That is, the ratio of the area of the square $a\cdot(b_+ - b_-) = ab$ and the region $C_f$ is increasing when $\alpha$ increases.
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## 3.
 
-### (a)
+Since $\beta$ is an inverse scale parameter, we can simply draw samples from $\operatorname{Gamma}(\alpha, 1)$ and divide every sample by $\beta$. This can be shown by looking at the mgf of $X/\beta$ where $X\sim \operatorname{Gamma}(\alpha, 1)$.
 
-### (b)
+$$
+  M_{X/\beta}(t) = M_X\left(\frac{t}{\beta}\right) = \left(1 - \frac{t}{\beta}\right)^{-\alpha} \sim \operatorname{Gamma}(\alpha,\beta).
+$$
+When $\alpha = 1$, this is simply the mgf of $\operatorname{Gamma}(1, \beta) \sim \Exp(\beta)$, so we can sample from `generate_from_exp()`. Using this fact together with the rejection sampling method for $0 < \alpha < 1$ and the ratio-of-uniforms method for $\alpha > 1$, we can sample from $\operatorname{Gamma}(\alpha,\beta)$ for any $\alpha>0$ and $\beta>0$.
+
+```{r final gamma sampler}
+set.seed(304)
+
+# Samples from the Gamma distribution
+# n:      number of samples
+# shape:  shape parameter
+# rate:   rate parameter
+sample_from_gamma <- function(n, shape = 1, rate = 1) {
+  if (shape < 1) {
+    return(sample_from_gamma_rej(n, shape = shape) / rate)  # rejection sampling
+  } else if (shape > 1) {
+    return(sample_from_gamma_rou(n, shape = shape) / rate)  # ratio-of-uniform
+  }
+  generate_from_exp(n, rate = rate)  # shape = 1, draw from the exponential distribution
+}
+
+# Sample
+n <- 50000  # Fifty thousand observations each
+# Create a tibble (dataframe) to store expectation, variance, sample mean and sample
+# variance with different combinations of parameters
+gamma_tb <- expand_grid(alpha = c(0.5, 1, 30), beta = c(0.3, 14)) %>%
+  mutate(expectation = alpha/beta) %>%  # add expectation
+  mutate(sample_mean = 0) %>%           # initialize sample mean variable
+  mutate(variance = alpha/beta^2) %>%   # add variance
+  mutate(sample_variance = 0)           # initialize sample variance variable
+
+for (row in 1:nrow(gamma_tb)) {
+  alpha <- gamma_tb[row, ]$alpha  # shape
+  beta <- gamma_tb[row, ]$beta    # rate
+  x <- sample_from_gamma(n, shape = alpha, rate = beta)  # draw sample
+  gamma_tb[row, ]$sample_mean <- mean(x)                 # store sample mean
+  gamma_tb[row, ]$sample_variance <- var(x)              # store sample variance
+}
+
+gamma_tb
+```
+The table shows that the expectation and variance corresponds well with the sample mean and sample variance from the samples.
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## 4.
 
-
-[//]: # ----------------------------------------------------------------------------------------------------------------
-
-## 5.
-
 ### (a)
+Let $X$ and $Y$ be independent random variables where $X\sim\operatorname{Gamma}(\alpha, 1)$ and $Y\sim\operatorname{Gamma}(\beta, 1)$. Let
+$$
+z = g_1(x, y) = \frac{x}{x + y} \quad \text{and}\quad w = g_2(x, y) = x + y
+$$
+Then $Z = g_1(X, Y)\in(0,1)$ and $W = g_2(X, Y)>0$. This gives us
+$$
+\begin{split}
+  &x = g_1^{-1}(z, w) = zw\quad\text{and}\quad y = g_2^{-1}(z, w) = w(1 - z), \\
+  &|\det(J)| = \left|\det\left(\begin{matrix}
+    \partial_zg_1^{-1}(z, w) & \partial_wg_1^{-1}(z, w) \\
+    \partial_zg_2^{-1}(z, w) & \partial_wg_2^{-1}(z, w)
+  \end{matrix}\right)\right| = \left|\det\left(\begin{matrix}
+    w & z \\
+    -w & 1 - z
+  \end{matrix}\right)\right| = |w| = w.
+\end{split}
+$$
+The marginal distribution $f_Z(z)$ is then found as follows.
+$$
+\begin{split}
+  f_Z(z) &= \int_{0}^\infty f_{Z,W}(z, w)\,dw \\
+  &=\int_0^\infty f_{X,Y}\left(g_1^{-1}(z, w), g_2^{-1}(z, w)\right)|\det(J)|\,dw \\
+  &= \int_0^\infty f_X\left(zw\right)\cdot f_Y\left(w(1 - z)\right)\cdot w\,dw \\
+  &= \int_0^\infty \frac{1}{\Gamma(\alpha)}(zw)^{\alpha - 1}e^{-zw}\cdot\frac{1}{\Gamma(\beta)}(w(1 - z))^{\beta - 1}e^{-w(1 - z)}\cdot w\,dw \\
+  &= \frac{1}{\Gamma(\alpha)\Gamma(\beta)}z^{\alpha - 1}(1 - z)^{\beta - 1} \Gamma(\alpha + \beta) \int_{0}^\infty \frac{1}{\Gamma(\alpha + \beta)} w^{(\alpha + \beta) - 1}e^{-w}\,dw \\
+  &= \frac{\Gamma(\alpha + \beta)}{\Gamma(\alpha)\Gamma(\beta)}z^{\alpha - 1}(1 - z)^{\beta - 1},\quad z\in(0, 1).\\
+\end{split}
+$$
+That is, 
+\begin{equation}\label{eq:beta}
+  Z = \frac{X}{X + Y}\sim f_Z(z)\sim \operatorname{Beta}(\alpha, \beta).
+\end{equation}
+
 
 ### (b)
 
+Figure \ref{fig:beta} shows a sample drawn from the beta distribution, with help from `sample_from_gamma()` using \eqref{eq:beta}.
+```{r beta sample, fig.cap = "\\label{fig:beta}Normalized histogram of a hundred thousand observations drawn from $\\operatorname{Beta}(\\alpha = 2, \\beta = 5)$."}
+set.seed(7)
+# Samples from the beta distribution
+# n:      number of observations
+# shape1: shape parameter
+# shape2: shape parameter
+sample_from_beta <- function(n, shape1, shape2) {
+  x <- sample_from_gamma(n, shape = shape1)
+  y <- sample_from_gamma(n, shape = shape2)
+  return(x / (x + y))
+}
+
+# Sample
+n <- 100000  # One hundred thousand observations
+alpha <- 2
+beta <- 5
+x <- sample_from_beta(n, shape1 = alpha, shape2 = beta)
+
+# Plot
+ggplot() +
+  geom_histogram(
+    mapping = aes(x, after_stat(density)),
+    bins = 50
+  ) +
+  geom_function(
+    mapping = aes(color = "Theoretical density"),
+    fun     = dbeta,
+    n       = 1001,
+    args    = list(shape1 = alpha, shape2 = beta),
+  ) +
+  theme_minimal()
+```
+
+The expectation and variance of $Z\sim\operatorname{Beta}(\alpha = `r alpha`,\beta = `r beta`)$ is $\E[X] = \alpha/(\alpha + \beta) = `r alpha/(alpha + beta)`$ and $\Var[x] = \alpha\beta/((\alpha + \beta)^2(\alpha + \beta + 1))  = `r alpha * beta / ((alpha + beta)^2 * (alpha + beta + 1))`$. We compare with the sample mean and sample variance,
+```{r beta sample mean and variance}
+list(sample_mean = mean(x), sample_variance = var(x))
+```
+and we see that it corresponds well to the theoretical values.
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 [//]: # ----------------------------------------------------------------------------------------------------------------
@@ -509,10 +852,163 @@ cov(t(normal))    # Transpose because we want with respect to the rows
 
 ## 1.
 
+Let $X\sim \operatorname{N}(0,1)$, and $\theta = \Pr(X > 4) \approx `r pnorm(4, lower.tail = FALSE)`$. Let also $h(x) = I(x > 4)$, where $I(\cdot)$ is the indicator function. Then
+$$
+\E[h(X)] = \int_{-\infty}^\infty h(x)f_X(x)\,dx = \int_{-\infty}^\infty I(x > 4) f_X(x)\,dx = \Pr(X>4) = \theta.
+$$
+
+Let $X_1,\ldots X_n\sim\operatorname{N}(0,1)$ be a sample. Then the simple Monte Carlo estimator of $\theta$ is
+$$
+  \hat\theta_{\mathrm{MC}} = \frac{1}{n}\sum_{i=1}^n h(X_i),
+$$
+with expectation
+$$
+  \E\left[\hat\theta_\mathrm{MC}\right] = \frac{1}{n}\sum_{i=1}^n\E\left[h(X_i)\right] = \frac{1}{n}\sum_{i=1}^n\theta = \theta,
+$$
+
+and sampling variance
+$$
+  \widehat{\Var}\left[\hat\theta_\mathrm{MC}\right] = \frac{1}{n^2}\sum_{i=1}^n\widehat{\Var}\left[h(X_i)\right]= \frac{1}{n}\widehat{\Var}[h(X)]=\frac{1}{n(n-1)}\sum_{i=1}^n\left(h(X_i) - \hat\theta_\mathrm{MC}\right)^2.
+$$
+
+Then the statistic
+$$
+  T = \frac{\hat\theta_\mathrm{MC} - \theta}{\sqrt{\widehat{\Var}\left[\hat\theta_\mathrm{MC}\right]}}\sim\mathrm t_{n - 1},
+$$
+and $t_{\alpha/2,\,n-1} = F_T^{-1}(1 - \alpha/2)$, where $F_T^{-1}(\cdot)$ is the quantile function of the $\mathrm{t}_{n-1}$ distribution.
+
+```{r Monte Carlo integration}
+set.seed(321)
+
+theta <- pnorm(4, lower.tail = FALSE)  # true value
+n <- 100000                            # number of observations
+x <- std_normal(n)                     # draw sample
+
+# Calculates I(x > 4), where I(.) is the indicator function
+# x: x-value(s)
+h <- function(x) {
+  1 * (x > 4)
+}
+
+hh <- h(x)                # I(X > 4) vector of ones and zeros
+theta_MC <- mean(hh)      # Monte Carlo estimate of Pr(X > 4)
+sample_var_MC <- var(hh)  # Sampling variance
+
+t <- qt(0.05/2, df = n - 1, lower.tail = FALSE)  # critical level with 5% significance
+ci_MC <- theta_MC + t * sqrt(sample_var_MC / n) * c(-1, 1)  # Confidence Interval
+
+# Result
+list(
+  theta_MC      = theta_MC,
+  sample_var_MC = sample_var_MC,
+  confint       = ci_MC,
+  error         = abs(theta_MC - theta)
+)
+```
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## 2.
+We will sample from the proposal distribution
+$$
+  g_X(x) = \begin{cases}cx e^{-\frac{1}{2}x^2}, & x > 4 \\ 0, & \text{otherwise}.\end{cases}
+$$
+but first we must find the normalizing constant $c$.
+
+$$
+\begin{split}
+  c &= \left(\int_{4}^\infty x e^{-\frac{1}{2}x^2}\,dx\right)^{-1} 
+  = \left(\int_{\frac{1}{2}4^2}^\infty e^{-u}\,du\right)^{-1} 
+  = \left(e^{-\frac{1}{2}4^2} - 0\right)^{-1} 
+  = e^{\frac{1}{2}4^2}, \\
+  \Rightarrow g_X(x) &= \begin{cases}x e^{-\frac{1}{2}(x^2 - 4^2)}, & x > 4, \\ 0, & \text{otherwise}.\end{cases}
+\end{split}
+$$
+
+We can easily sample from the proposal distribution using inversion sampling. The cdf for $x>4$ is found by integrating.
+$$
+  G_X(x) = \int_4^x y e^{-\frac{1}{2}(y^2 - 4^2)}\,dy = \int_0^{\frac{1}{2}(x^2 - 4^2)}e^{-u}\,du = 1 - e^{-\frac{1}{2}(x^2 - 4^2)},\quad x> 4,
+$$
+and $G_X(x) = 0$ for $x \leq 4$. Let $U = G_X(X)\sim \Uniform(0, 1)$. Then we solve for $X$.
+$$
+\begin{split}
+  U &= 1 - e^{-\frac{1}{2}(X^2 - 4^2)} \\
+  -\frac{1}{2}(X^2 - 4^2) &= \log(1 - U) \\
+  X &= \sqrt{4^2 -2\log(1 - U)}, \quad U\sim \Uniform(0, 1).
+\end{split}
+$$
+
+Let $X_1,\ldots,X_n$ be a sample drawn from the proposal distribution $g_X(x)$. Then the importance sampling estimator of $\theta$ is given by
+$$
+  \hat\theta_\mathrm{IS} = \frac{1}{n}\sum_{i=1}^n h(X_i)w(X_i),
+$$
+where $w(x) = f_X(x)/g_X(x)$, with expectation
+
+$$
+\begin{split}
+\E\left[\hat\theta_\mathrm{IS}\right] &= \frac{1}{n}\sum_{i=1}^n\int_{0}^\infty h(x_i)w(x_i)g_X(x_i)\,dx_i \\
+&= \frac{1}{n}\sum_{i=1}^n\int_{0}^\infty h(x_i)f_X(x_i)\,dx_i \\
+&= \frac{1}{n}\sum_{i=1}^n\E\left[h(X_i)\mid X_i\sim \operatorname{N}(0, 1)\right] \\
+&= \frac{1}{n}\sum_{i=1}^n\theta \\
+&= \theta,
+\end{split}
+$$
+
+and sampling variance
+
+$$
+  \widehat{\Var}\left[\hat\theta_\mathrm{IS}\right] = \frac{1}{n^2}\sum_{i=1}^n\widehat{\Var}\left[h(X_i)w(X_i)\right]= \frac{1}{n}\widehat{\Var}[h(X)w(X)]=\frac{1}{n(n-1)}\sum_{i=1}^n\left(h(X_i)w(X_i) - \hat\theta_\mathrm{IS}\right)^2.
+$$
+```{r Importance Sampling}
+set.seed(321)
+
+# Samples from the proposal distribution
+# n: number of observations
+sample_from_proposal <- function(n) {
+  u <- runif(n)
+  sqrt(4^2 - 2 * log(1 - u))
+}
+
+# Sample
+n <- 100000                   # Hundred thousand observations
+x <- sample_from_proposal(n)  # sample
+
+# Computes the weight f(x) / g(x) where f(x) is the target density and g(x) is the
+# proposal density.
+# x: x-value(s)
+w <- function(x) {
+  f <- dnorm(x)                              # target density
+  g <- ifelse(                               # proposal density
+         test = x > 4,
+         yes  = x * exp(-0.5 * (x^2 - 16)),
+         no   = 0
+       )
+  return(f / g)
+}
+
+hw <- h(x) * w(x)
+
+theta_IS <- mean(hw)      # Importance sampling estimate of Pr(X > 4)
+sample_var_IS <- var(hw)  # Sampling variance
+
+t <- qt(0.05/2, df = n - 1, lower.tail = FALSE)  # critical level with 5% significance
+ci_IS <- theta_IS + t * sqrt(sample_var_IS / n) * c(-1, 1)  # Confidence Interval
+
+# Result
+list(
+  theta_IS      = theta_IS,
+  sample_var_IS = sample_var_IS,
+  confint       = ci_IS,
+  error         = abs(theta_IS - theta)
+)
+```
+
+We see that using this importance sampling method is more precise by far. The number of samples $m$ needed for the simple Monte Carlo estimator to achieve the same precision as the importance sampling approach, we would need
+
+$$
+  m = n\frac{\widehat{\Var}[h(X)]}{\widehat{\Var}[h(X)w(X)]} = `r n`\frac{`r sample_var_MC`}{`r sample_var_IS`} = `r n * sample_var_MC / sample_var_IS`,
+$$
+samples. That is, we need about $10$ million times more samples.
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
@@ -520,8 +1016,88 @@ cov(t(normal))    # Transpose because we want with respect to the rows
 ## 3.
 
 ### (a)
+We modify `sample_from_proposal()` to return a pair of samples, where one takes $U\sim\Uniform(0,1)$ as argument and the other $1 - U$ as argument.
+
+Let $X_1^{(1)},\ldots X_n^{(1)}$ and $X_1^{(2)},\ldots,X_n^{(2)}$ be a such sample pair drawn from the proposal distribution, with the importance sampling estimators being
+$$
+  \hat\theta_\mathrm{IS}^{(1)} = \frac{1}{n}\sum_{i=1}^nh(X_i^{(1)})w(X_i^{(1)})\quad\text{and}\quad \hat\theta_\mathrm{IS}^{(2)} = \frac{1}{n}\sum_{i=1}^nh(X_i^{(2)})w(X_i^{(2)}).
+$$
+The antithetic estimator is then given by
+
+$$
+  \hat\theta_\mathrm{AS} = \frac{\hat\theta_\mathrm{IS}^{(1)} + \hat\theta_\mathrm{IS}^{(2)}}{2},
+$$
+with expectation
+
+$$
+  \E\left[\hat\theta_\mathrm{AS}\right] = \frac{1}{2}\left(\E\left[\hat\theta_\mathrm{IS}^{(1)}\right] + \E\left[\hat\theta_\mathrm{IS}^{(2)}\right]\right) = \theta,
+$$
+and variance
+
+$$
+\begin{split}
+  \Var\left[\hat\theta_\mathrm{AS}\right]
+  &= \frac{1}{4}\left(\Var\left[\hat\theta_\mathrm{IS}^{(1)}\right] + \Var\left[\hat\theta_\mathrm{IS}^{(2)}\right] + 2\Cov\left[\hat\theta_\mathrm{IS}^{(1)}, \hat\theta_\mathrm{IS}^{(2)}\right]\right) \\
+  &= \frac{\Var\left[h(X)w(X)\right]}{2n}\left(1 + \Corr\left[h(X^{(1)})w(X^{(1)}), h(X^{(2)})w(X^{(2)})\right]\right).
+\end{split}
+$$
+
+```{r Proposal function modified}
+# Samples from the proposal distribution returning a list consisting of n pairs of
+# antithetic variates, with one taking U ~ Uniform(0, 1) as argument, and the other takes
+# (1 - U) as argument.
+# n: number of observations
+sample_from_proposal_mod <- function(n) {
+  u <- runif(n)
+  list(
+    x_1 = sqrt(4^2 - 2 * log(1 - u)),
+    x_2 = sqrt(4^2 - 2 * log(u))
+  )
+}
+```
+
 
 ### (b)
+
+```{r Antithetic sampling}
+set.seed(53)
+
+# Sample
+n <- 50000  # Fifty thousand observations 
+sample_pair <- sample_from_proposal_mod(n)  # n pairs of samples
+
+hw1 <- h(sample_pair$x_1) * w(sample_pair$x_1)  # first of pair 
+hw2 <- h(sample_pair$x_2) * w(sample_pair$x_2)  # second of pair
+hw_AS <- 0.5 * (hw1 + hw2)  # Antithetic sample
+
+theta_AS <- mean(hw_AS)      # Antithetic sampling estimate of Pr(X > 4)
+sample_var_AS <- var(hw_AS)  # Sampling variance
+
+t <- qt(0.05/2, df = n - 1, lower.tail = FALSE)  # critical level with 5% significance
+ci_AS <- theta_AS + t * sqrt(sample_var_AS / n) * c(-1, 1)  # Confidence Interval
+
+# Result
+list(
+  theta_AS      = theta_AS,
+  sample_var_AS = sample_var_AS,
+  sample_corr   = cor(hw1, hw2),
+  confint       = ci_AS,
+  error         = abs(theta_AS - theta)
+)
+```
+
+We see an better estimate of $\theta$, even with half the sample size compared to the importance sampling.
+
+Above we found that
+\begin{equation}\label{eq:antith-var}
+  \Var\left[\hat\theta_\mathrm{AS}\right]
+  = \frac{\Var\left[h(X)w(X)\right]}{2n}\left(1 + \Corr\left[h(X^{(1)})w(X^{(1)}), h(X^{(2)})w(X^{(2)})\right]\right),
+\end{equation}
+which means that when the correlation term is equal to zero, we would expect about the same variance as in the importance sampling method with half the sample size. The sampling correlation computed above is
+$$
+  \Corr\left[h(X^{(1)})w(X^{(1)}), h(X^{(2)})w(X^{(2)})\right] = `r cor(hw1, hw2)`,
+$$
+which explains why we get an even more precise estimate.
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
