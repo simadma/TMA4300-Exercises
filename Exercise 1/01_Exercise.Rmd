@@ -401,7 +401,7 @@ We wish to simulate from a $d$-variate normal distribution with mean vector $\mu
 $$
   X = \mu + A Z \sim \Normal_d(\mu, A A^\top),
 $$
-such that we need to find $A$ such that $\Sigma = A A^\top$, this is done using `chol()` in `R`, and we construct the function in the following code block.
+such that we need to find the lower triangular matrix $A$ such that $\Sigma = A A^\top$, and this is done using `chol()` in `R`. We construct the function `d_variate_normal()` in the following code block to simulate using the Box-Muller algorithm.
 
 ```{r generate from d-variate normal}
 
@@ -1258,7 +1258,7 @@ These corresponds well, and we see that we need to generate approximately $7.8$ 
 
 
 
-## Subsection 4.
+## Subproblem 4.
 
 We now assume a $\Betadist(1, 5)$ prior
 $$
