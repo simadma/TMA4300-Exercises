@@ -692,6 +692,7 @@ list(sample_mean = mean(x), sample_variance = var(x))
 and see that they are close to the true values.
 
 ```{r compare number of trials for each alpha, fig.cap = "\\label{fig:gamma-trials}Number of trials before accepting $N = 1000$ simulations for various shape parameters ($\\alpha$) using the ratio-of-uniform method."}
+
 set.seed(515)
 
 # Sample 1000 observations for each alpha and record number of trials
@@ -1122,15 +1123,15 @@ and we find it using the `integrate()`-function in `R` below. To use the rejecti
 $$
   \frac{f(\theta \mid \bfy)}{g(\theta \mid \bfy)} = f(\theta \mid \bfy) \leq k,
 $$
-and a value for $k$ is found in the code block below. This is done by setting $k = \max_\theta f^*(\theta \mid \bfy)$, and for the observed $\bfy$, we have that
+and a value for $k$ is found in the code block below. This is done by setting $k = \max_\theta f(\theta \mid \bfy)$, and for the observed $\bfy$, we have that
 $$
-  \frac{\mathrm{d} f^*(\theta \mid \bfy)}{\mathrm{d} \theta} = (\theta-1)^{37} \theta^{33} (\theta + 2)^{124} (197 \theta^2 - 15 \theta - 68) = 0.
+  \frac{\mathrm{d} f(\theta \mid \bfy)}{\mathrm{d} \theta} \propto \frac{\mathrm{d} f^*(\theta \mid \bfy)}{\mathrm{d} \theta} = (\theta-1)^{37} \theta^{33} (\theta + 2)^{124} (197 \theta^2 - 15 \theta - 68) = 0.
 $$
 Because $\theta \in (0, 1)$, the only factor we need to consider is $197 \theta^2 - 15 \theta - 68 = 0$, giving
 $$
   \theta_\mathrm{max} = \frac{15 + \sqrt{53809}}{394},
 $$
-such that $k = f^*(\theta_\mathrm{max} \mid \bfy)$. This however is found numerically with the `optimize()`-function in `R` below. We then simulate $\Theta \sim \Uniform(0, 1)$ and $U \sim \Uniform(0, 1)$ and calculate $\alpha = f(\theta \mid \bfy) / k$. Then, if $U \leq \alpha$, $\Theta$ is returned, and if not, the procedure is run again. We then sample from the posterior distribution in the code block below.
+such that $k = f(\theta_\mathrm{max} \mid \bfy) / K$. This however is found numerically with the `optimize()`-function in `R` below. We then simulate $\Theta \sim \Uniform(0, 1)$ and $U \sim \Uniform(0, 1)$ and calculate $\alpha = f(\Theta \mid \bfy) / k$. Then, if $U \leq \alpha$, $\Theta$ is returned, and if not, the procedure is run again. We then sample from the posterior distribution in the code block below.
 
 ```{r generate using rejection sampling}
 
