@@ -166,13 +166,13 @@ $$
 $$
 for $\alpha \in (0, 1)$.
 
-We may then find the inverse cumulative function. For $x \leq 0$ this is just zero, and for $0 < x < 1$, that is $0 < G(x) < \frac{\mathrm{e}}{\alpha + \mathrm{e}}$, we solve $x = \frac{\mathrm{e}}{\alpha + \mathrm{e}} y^\alpha$ for $y$ giving $G^{-1}(x) = \left( \frac{\alpha + \mathrm{e}}{\mathrm{e}} x \right)^{1/\alpha}$. Similarly for $x \geq 1$, that is $G(x) \geq 1 - \frac{\alpha}{\alpha + \mathrm{e}} = \frac{\mathrm{e}}{\alpha + \mathrm{e}}$, we solve $x = 1 - \frac{\alpha}{\alpha + \mathrm{e}} \mathrm{e}^{1-y}$ for $y$, such that
+We may then find the inverse cumulative function. For $x \leq 0$ this is just zero, and for $0 < x < 1$, that is $0 < G(x) < \frac{\mathrm{e}}{\alpha + \mathrm{e}}$, we solve $y = \frac{\mathrm{e}}{\alpha + \mathrm{e}} x^\alpha$ for $x$ giving $G^{-1}(y) = \left( \frac{\alpha + \mathrm{e}}{\mathrm{e}} y \right)^{1/\alpha}$. Similarly for $x \geq 1$, that is $G(x) \geq 1 - \frac{\alpha}{\alpha + \mathrm{e}} = \frac{\mathrm{e}}{\alpha + \mathrm{e}}$, we solve $y = 1 - \frac{\alpha}{\alpha + \mathrm{e}} \mathrm{e}^{1-x}$ for $x$, such that
 $$
-  G^{-1}(x) =
+  G^{-1}(y) =
   \begin{cases}
-    \left( \frac{\alpha + \mathrm{e}}{\mathrm{e}} x \right)^{1/\alpha} & \text{if } 0 \leq x < \frac{\mathrm{e}}{\alpha + \mathrm{e}},
+    \left( \frac{\alpha + \mathrm{e}}{\mathrm{e}} y \right)^{1/\alpha} & \text{if } 0 \leq y < \frac{\mathrm{e}}{\alpha + \mathrm{e}},
     \\
-    \ln\left[ \frac{\alpha \mathrm{e}}{(1-x) (\alpha + \mathrm{e})} \right] & \text{if } \frac{\mathrm{e}}{\alpha + \mathrm{e}} \leq x \leq 1,
+    \ln\left[ \frac{\alpha \mathrm{e}}{(1-y) (\alpha + \mathrm{e})} \right] & \text{if } \frac{\mathrm{e}}{\alpha + \mathrm{e}} \leq y \leq 1,
   \end{cases}
 $$
 for $\alpha \in (0, 1)$.
@@ -283,11 +283,11 @@ $$
 $$
 which holds for $-\infty < x < \infty$ and $\alpha > 0$.
 
-Solving $x = \e^{\alpha y} / (1 + \e^{\alpha y})$ for $y$ then gives us the inverse cumulative distribution function. Some algebra then gives that
+Solving $y = \e^{\alpha x} / (1 + \e^{\alpha x})$ for $x$ then gives us the inverse cumulative distribution function. Some algebra then gives that
 $$
-  F^{-1}(x) = \frac{1}{\alpha} \ln\left( \frac{x}{1-x} \right) = \frac{1}{\alpha} \left[ \ln\left( x \right) - \ln\left( 1-x \right) \right],
+  F^{-1}(y) = \frac{1}{\alpha} \ln\left( \frac{y}{1-y} \right) = \frac{1}{\alpha} \left[ \ln\left( y \right) - \ln\left( 1-y \right) \right],
 $$
-for $0 < x < 1$ and $\alpha > 0$.
+for $0 < y < 1$ and $\alpha > 0$.
 
 
 ### Subsubproblem (c)
@@ -353,12 +353,12 @@ var(fx_samp)
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 4.
-We wish to simulate from a $\Normal(0, 1)$ distribution using the Box-Muller algoritm. If $X_1 \sim \Uniform(0, \pi)$ and $X_2 \sim \Exp(1/2)$, then $Y_1 = \sqrt{X_2} \cos(X_1)$ and $Y_2 = \sqrt{X_2} \sin(X_1)$ are standard normal distributed. We use $Z = \sqrt{X_2} \cos(X_1)$ in the following code block. The result of the simulation can be seen in Figure \ref{fig:Box_Muller}, and it also shows the theoretical probability density function.
+We wish to simulate from a $\Normal(0, 1)$ distribution using the Box-Muller algoritm. If $X_1 \sim \Uniform(0, 2\pi)$ and $X_2 \sim \Exp(1/2)$, then $Y_1 = \sqrt{X_2} \cos(X_1)$ and $Y_2 = \sqrt{X_2} \sin(X_1)$ are standard normal distributed. We use $Z = \sqrt{X_2} \cos(X_1)$ in the following code block. The result of the simulation can be seen in Figure \ref{fig:Box_Muller}, and it also shows the theoretical probability density function.
 
 ```{r generate from Box-Muller, fig.cap = "\\label{fig:Box_Muller}One million samples drawn from a standard normal distribution using the Box-Muller algorithm, together with the theoretical PDF."}
 
 std_normal <- function(n) {
-  X1 <- pi * runif(n)   # n samples from Uniform(0, pi)
+  X1 <- 2 * pi * runif(n)   # n samples from Uniform(0, 2pi)
   X2 <- generate_from_exp(n, 1/2)   # n samples from Exponential(1/2)
   Z <- X2^(1/2) * cos(X1)   # Z ~ Normal(0, 1)
   return(Z)
@@ -449,9 +449,9 @@ cov(t(normal))    # Transpose because we want with respect to the rows
 
 # Problem B: The gamma distribution
 
-## 1.
+## Subproblem 1.
 
-### (a)
+### Subsubproblem (a)
 
 Let $f(x)$ be the target distribution we wish to sample from, and let $g(x)$ be the proposal distribution. For the rejection sampling algorithm, we require that
 \begin{equation}\label{eq:rej_samp}
@@ -494,7 +494,7 @@ $$
 $$
 
 
-### (b)
+### Subsubproblem (b)
 Figure \ref{fig:gamma_rej} shows a sample drawn from the Gamma distribution using the rejection sampling method.
 
 ```{r gamma rejection sampling, fig.cap = "\\label{fig:gamma_rej}Normalized histogram of a hundred thousand samples drawn from $\\operatorname{Gamma}(\\alpha = 0.7, \\beta = 1)$ using rejection sampling, together with the theoretical density function."}
@@ -554,9 +554,9 @@ and see that it corresponds well to the true values.
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
-## 2.
+## Subproblem 2.
 
-### (a)
+### Subsubroblem (a)
 We will now use the ratio-of-uniforms method to simulate from $\operatorname{Gamma}(\alpha,\beta = 1)$. Additionally we have $\alpha>1$ this time. Let us define
 \begin{equation}\label{eq:rat-of-uni}
   C_f = \left\{(x_1, x_2) : 0 \leq x_1 \leq \sqrt{f^*\left(\frac{x_2}{x_1}\right)}\right\}, \quad \text{where} \quad f^*(x) = \begin{cases}
@@ -571,7 +571,7 @@ and
 a = \sqrt{\sup_x f^*(x)},\quad b_+ = \sqrt{\sup_{x\geq 0}(x^2 f^*(x))}\quad \text{and}\quad b_- = -\sqrt{\sup_{x\leq 0}(x^2 f^*(x))},
 \end{equation}
 
-such that $C_f\subset[0,1]\times[b_-, b_+]$.
+such that $C_f\subset[0,a]\times[b_-, b_+]$.
 
 First we find $\sup_x f^*(x)$. This must be when $x>0$. We differentiate $f^*(x)$ and setting the expression equal to zero to find the stationary point.
 $$
@@ -607,7 +607,7 @@ Finally, we have that
   b_- = -\sqrt{\sup_{x\leq 0}(x^2\cdot 0)} = 0.
 \end{equation}
 
-### (b)
+### Subsubproblem (b)
 
 To avoid producing `NaNs`, we will implement the ratio-of-uniform method on a log scale.
 We get the following log-transformations.
@@ -716,7 +716,7 @@ Figure \ref{fig:gamma-trials} strongly suggests that the acceptance probability 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
-## 3.
+## Subproblem 3.
 
 Since $\beta$ is an inverse scale parameter, we can simply draw samples from $\operatorname{Gamma}(\alpha, 1)$ and divide every sample by $\beta$. This can be shown by looking at the mgf of $X/\beta$ where $X\sim \operatorname{Gamma}(\alpha, 1)$.
 
@@ -766,9 +766,9 @@ The table shows that the expectation and variance corresponds well with the samp
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
-## 4.
+## Subproblem 4.
 
-### (a)
+### Subsubproblem (a)
 Let $X$ and $Y$ be independent random variables where $X\sim\operatorname{Gamma}(\alpha, 1)$ and $Y\sim\operatorname{Gamma}(\beta, 1)$. Let
 $$
 z = g_1(x, y) = \frac{x}{x + y} \quad \text{and}\quad w = g_2(x, y) = x + y
@@ -803,7 +803,7 @@ That is,
 \end{equation}
 
 
-### (b)
+### Subsubproblem (b)
 
 Figure \ref{fig:beta} shows a sample drawn from the beta distribution, with help from `sample_from_gamma()` using \eqref{eq:beta}.
 ```{r beta sample, fig.cap = "\\label{fig:beta}Normalized histogram of a hundred thousand observations drawn from $\\operatorname{Beta}(\\alpha = 2, \\beta = 5)$."}
@@ -851,7 +851,7 @@ and we see that it corresponds well to the theoretical values.
 
 # Problem C: Monte Carlo integration and variance reduction
 
-## 1.
+## Subproblem 1.
 
 Let $X\sim \operatorname{N}(0,1)$, and $\theta = \Pr(X > 4) \approx `r pnorm(4, lower.tail = FALSE)`$. Let also $h(x) = I(x > 4)$, where $I(\cdot)$ is the indicator function. Then
 $$
@@ -909,7 +909,7 @@ list(
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
-## 2.
+## Subproblem 2.
 We will sample from the proposal distribution
 $$
   g_X(x) = \begin{cases}cx e^{-\frac{1}{2}x^2}, & x > 4 \\ 0, & \text{otherwise}.\end{cases}
@@ -1014,9 +1014,9 @@ samples. That is, we need about $10$ million times more samples.
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
-## 3.
+## Subproblem 3.
 
-### (a)
+### Subsubproblem (a)
 We modify `sample_from_proposal()` to return a pair of samples, where one takes $U\sim\Uniform(0,1)$ as argument and the other $1 - U$ as argument.
 
 Let $X_1^{(1)},\ldots X_n^{(1)}$ and $X_1^{(2)},\ldots,X_n^{(2)}$ be a such sample pair drawn from the proposal distribution, with the importance sampling estimators being
@@ -1058,7 +1058,7 @@ sample_from_proposal_mod <- function(n) {
 ```
 
 
-### (b)
+### Subsubproblem (b)
 
 ```{r Antithetic sampling}
 set.seed(53)
@@ -1096,7 +1096,7 @@ Above we found that
 \end{equation}
 which means that when the correlation term is equal to zero, we would expect about the same variance as in the importance sampling method with half the sample size. The sampling correlation computed above is
 $$
-  \Corr\left[h(X^{(1)})w(X^{(1)}), h(X^{(2)})w(X^{(2)})\right] = `r cor(hw1, hw2)`,
+  \widehat{\Corr}\left[h(X^{(1)})w(X^{(1)}), h(X^{(2)})w(X^{(2)})\right] = `r cor(hw1, hw2)`,
 $$
 which explains why we get an even more precise estimate.
 
@@ -1233,7 +1233,7 @@ In the following code block we find the values of `mu_est` and `mu_num`.
 mu_est
 mu_num
 ```
-From this it is clear that the estimated posterior mean is $\hat{\mu} \approx 0.624$ using Monte Carlo integration, and $\mu \approx 0.623$ using numerical integration with `integrate()`. Figure \ref{fig:Monte_Carlo} also shows that these means corresponds well to the real posterior mean.
+From this it is clear that the estimated posterior mean is $\hat{\mu} \approx r `mu_est`$ using Monte Carlo integration, and $\mu \approx `r mu_num`$ using numerical integration with `integrate()`. Figure \ref{fig:Monte_Carlo} also shows that these means corresponds well to the real posterior mean.
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
