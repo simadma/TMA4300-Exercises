@@ -1233,7 +1233,7 @@ In the following code block we find the values of `mu_est` and `mu_num`.
 mu_est
 mu_num
 ```
-From this it is clear that the estimated posterior mean is $\hat{\mu} \approx r `mu_est`$ using Monte Carlo integration, and $\mu \approx `r mu_num`$ using numerical integration with `integrate()`. Figure \ref{fig:Monte_Carlo} also shows that these means corresponds well to the real posterior mean.
+From this it is clear that the estimated posterior mean is $\hat{\mu} \approx `r round(mu_est, 3)`$ using Monte Carlo integration, and $\mu \approx `r round(mu_num, 3)`$ using numerical integration with `integrate()`. Figure \ref{fig:Monte_Carlo} also shows that these means corresponds well to the real posterior mean.
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
@@ -1251,7 +1251,7 @@ and we chose the equality earlier. This was found earlier and stored in the vari
 ```{r, eval = TRUE}
 k
 ```
-Using the sampler, the expected number of random numbers that has to be generated in order to obtain one sample of $f(\theta \mid \bfy)$ is the amount of times the ´while´ loop runs divided by the length amount of samples of $f(\theta \mid \bfy)$. This value is given in the following code block.
+Using the sampler, the expected number of random numbers that has to be generated in order to obtain one sample of $f(\theta \mid \bfy)$ is the amount of times the `while` loop runs divided by the length amount of samples of $f(\theta \mid \bfy)$. This value is given in the following code block.
 ```{r using the sampling}
 Theta_samp$co / M
 ```
