@@ -8,23 +8,28 @@ output:
   html_document:
     df_print: paged
 subtitle: TMA4300 Computer Intensive Statistical Models
+bibliography: ref.bib
 ---
 
 ```{r setup, include=FALSE}
 library(rmarkdown)  # Dynamic Documents for R
 library(knitr)  # A General-Purpose Package for Dynamic Report Generation in R
-knitr::opts_chunk$set(echo = TRUE, tidy = FALSE, message = FALSE, warning = FALSE,
-                      strip.white = TRUE, prompt = FALSE, cache = TRUE,
-                      size = "scriptsize", fig.width = 6, fig.height = 4)
+knitr::opts_chunk$set(
+  echo = TRUE, tidy = FALSE, message = FALSE, warning = FALSE, strip.white = TRUE,
+  prompt = FALSE, cache = TRUE, size = "scriptsize", fig.width = 6, fig.height = 4,
+  fig.align = 'center'
+)
 ```
 
 \newcommand{\E}{\operatorname E}
 \newcommand{\Var}{\operatorname{Var}}
 \newcommand{\Cov}{\operatorname{Cov}}
 \newcommand{\Corr}{\operatorname{Corr}}
+\newcommand{\Poisson}{\operatorname{Poisson}}
 \newcommand{\Exp}{\operatorname{Exponential}}
 \newcommand{\Uniform}{\operatorname{Uniform}}
 \newcommand{\Betadist}{\operatorname{Beta}}
+\newcommand{\Gammadist}{\operatorname{Gamma}}
 \newcommand{\Normal}{\operatorname{Normal}}
 \newcommand{\SD}{\operatorname{SD}}
 \newcommand{\RSS}{\mathrm{RSS}}
@@ -43,24 +48,113 @@ knitr::opts_chunk$set(echo = TRUE, tidy = FALSE, message = FALSE, warning = FALS
 ```{r libraries, eval = TRUE, echo = FALSE}
 library(tidyverse)  # Collection of R packages designed for data science
 
+library(lubridate)  # Make Dealing with Dates a Little Easier
+
 library(INLA)       # Full Bayesian Analysis of Latent Gaussian Models using Integrated
                     # Nested Laplace Approximations
 ```
 
 # Problem A: The coal-mining disaster data
 
+In this problem, we analyze a data set from [@jarrett1979note] on the dates of 191 explosions in coal mines in UK involving 10 or more fatalities, covering the period 15 March, 1851 to 22 March, 1962 inclusive.
+
 ## Subproblem 1.
+Figure \ref{fig:coal} shows the 191 explosions over the period. It appears to be a steep linear trend from the beginning to about year 1890  where there is a sudden decrease in the rate. This suggests that there has been a major improvement in the safety regulations. By digging a little deeper, we find that according to [@mills2010regulating], in the late 1890s, all underground extractive industries in the UK, were subjected to varying degrees of regulation and control, and the inspectorate had greatly expanded in numbers, experience and authority.
+
+```{r coal, fig.width=4, fig.height=3, fig.cap="\\label{fig:coal}Cumulative plot of coal mines explosions from the period 15 March, 1851 to 22 March, 1962."}
+data(coal, package = "boot")
+ggplot(cbind(coal, explosions = 1:nrow(coal)), aes(date, explosions)) +
+  geom_step(aes(color = "Cumulative explosions")) +
+  theme_minimal() +
+  theme(legend.position = "top", legend.title = element_blank())
+```
+
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 2.
+We assume the coal-mining disasters follow an inhomogeneous Poisson process with intensity function $\lambda(t)$ (number of events per year).
+We assume $\lambda(t)$ to be piecewise constant with $n$ breakpoints at times
+$t_k:k=1,\ldots,n$.
+We let $t_0=0$ and $t_{n+1}=T$ be the start and end times corresponding to 15 March, 1851 and 22 March, 1962, respectively, and let $0=t_0<t_1<t_2<\ldots<t_n<t_{n+1}=T$.
+Then the intensity function becomes
+\begin{equation}\label{eq:intensity}
+  \lambda(t) = \begin{cases}
+    \lambda_{k-1}, & \text{if}\,t\in[t_{k-1},t_k),\quad k=1,\ldots,n, \\
+    \lambda_n, & \text{if}\,t\in[t_n,T].
+  \end{cases}
+\end{equation}
+
+Furthermore, let $x_k$ be the $y_k$-vector of the exact times when the disasters occurred in the time interval $[t_k, t_{k+1})$.
+We then let $x$ be the $y$-vector of the exact times when the disasters occurred in the whole time interval $[0, T]$, where $y = \sum_{k=0}^n y_k$.
+We assume that the coal-mining disasters follow a hierarchical Bayesian structure, with
+\begin{equation}\label{eq:bayes-poisson}
+  \begin{split}
+    [y_k\mid\lambda_k, t_k, t_{k+1}]&\sim\Poisson(\lambda_k(t_{k+1} - t_k)),\quad k=0,1,\ldots, n,\\
+    [x_k\mid y_k,t_{k},t_{k+1}]&\sim \frac{y_k!}{(t_{k+1} - t_k)^{y_k}},
+    \quad\quad\quad\quad\quad k=0,1,\ldots, n,\\
+    \Rightarrow\quad [x_k,y_k\mid\lambda_k,t_{k},t_{k+1}]&\sim \lambda_k^{y_k}\exp(-\lambda_k(t_{k+1} - t_k)),
+    \; k=0,1,\ldots, n, \\
+    t_k &\sim \Uniform(t_{k-1}, t_{k+1}),\quad\, \quad k=1,2,\ldots, n, \\
+    [\lambda_k\mid\beta]&\sim \Gammadist(2, 1/\beta),\quad\quad\quad\quad k=0,1,\ldots,n, \\
+    \beta &\sim f_\beta(\beta)\propto \frac{\exp\left(-\frac{1}{\beta}\right)}{\beta},\quad\beta>0,
+  \end{split}
+\end{equation}
+where $\lambda_0,\ldots,\lambda_n$ are conditionally independent of each other with respect to $\beta$ and independent of $t_1,\ldots,t_n$, where the first and second argument in $\Gammadist(\cdot, \cdot)$ corresponds to the shape and rate parameter, respectively, and where $f_\beta(\beta)$ is an improper prior.
+
+We will in this problem assume $n=1$, such that the model parameters are $\theta = (t_1, \lambda_0, \lambda_1, \beta)$.
+The posterior distribution for $\theta$ given the observed data $x$ is then given by
+$$
+\begin{split}
+  f_{\theta\mid x,y}(\theta\mid x,y)
+  &\propto f_{\theta, x,y}(\theta, x,y) \\
+  &= f_{x,y\mid t_1,\lambda_0,\lambda_1}(x,y\mid t_1,\lambda_0,\lambda_1)\cdot f_{t_1}(t_1)\cdot f_{\lambda_0\mid \beta}(\lambda_0\mid\beta) \cdot f_{\lambda_1\mid \beta}(\lambda_1\mid\beta) \cdot f_\beta(\beta) \\
+  &\propto \lambda_0^{y_0}\exp(-\lambda_0t_1)\lambda_1^{y_1}\exp(-\lambda_1(T - t_1))\cdot\frac{1}{T}\cdot \frac{\lambda_0}{\beta^2}\e^{-\frac{\lambda_0}{\beta}}\cdot\frac{\lambda_1}{\beta^2}\e^{-\frac{\lambda_1}{\beta}}\cdot \frac{\exp\left(-\frac{1}{\beta}\right)}{\beta} \\
+  &\propto \frac{\lambda_0^{y_0 + 1}\lambda_1^{y_1 + 1}}{\beta^5}\exp\left\{-\left((\lambda_0 - \lambda_1)t_1 + \lambda_1T + \frac{1}{\beta}(\lambda_0 + \lambda_1 + 1)\right)\right\},\\
+  &\text{with}\quad \beta > 0,\; \lambda_0\geq0,\;\lambda_1\geq0\quad\text{and}\quad 0\leq t_1 \leq T.
+\end{split}
+$$
+That is, the posterior distribution is equal to
+\begin{equation}\label{eq:A-posterior}
+  f_{\theta\mid x,y}(\theta\mid x) = \frac{1}{c}\cdot \frac{\lambda_0^{y_0 + 1}\lambda_1^{y_1 + 1}}{\beta^5}\exp\left\{-\left((\lambda_0 - \lambda_1)t_1 + \lambda_1T + \frac{1}{\beta}(\lambda_0 + \lambda_1 + 1)\right)\right\},
+\end{equation}
+where $c$ is the normalizing constant.
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 3.
-
+We calculate the full conditional for each of the elements in $\theta$.
+$$
+\begin{split}
+  [t_1\mid\lambda_0,\lambda_1,\beta,x,y]
+  &\sim f_{t_1\mid\lambda_0,\lambda_1,\beta,x,y}(t_1\mid\lambda_0,\lambda_1,\beta,x,y) \\
+  &\propto f_{\theta\mid x,y}(\theta\mid,x,y) \\
+  &\propto \exp\left\{-(\lambda_0 - \lambda_1)t_1\right\} \\
+  &\sim \Exp(\lambda_0 - \lambda_1); \\
+  [\lambda_0\mid t_1,\lambda_1,\beta,x,y] &\sim f_{\lambda_0\mid t_1,\lambda_1,\beta,x,y}(\lambda_0\mid t_1,\lambda_1,\beta,x,y) \\
+  &\propto f_{\theta\mid x,y}(\theta\mid,x,y) \\
+  &\propto \lambda_0^{(y_0 + 2) - 1}\exp\left\{-\left(t_1 + \frac{1}{\beta}\right)\lambda_0\right\} \\
+  &\sim\Gammadist\left(y_0 + 2, t_1 + \frac{1}{\beta}\right); \\
+  [\lambda_1\mid t_1,\lambda_0,\beta,x,y] &\sim f_{\lambda_1\mid t_1,\lambda_0,\beta,x,y}(\lambda_1\mid t_1,\lambda_0,\beta,x,y) \\
+  &\propto f_{\theta\mid x,y}(\theta\mid,x,y) \\
+  &\propto \lambda_1^{(y_1 + 2) - 1}\exp\left\{-\left(T - t_1 + \frac{1}{\beta}\right)\right\} \\
+  &\sim \Gammadist\left(y_1 + 2, T - t_1 + \frac{1}{\beta}\right); \\
+  [\beta\mid t_1\lambda_0,\lambda_1,x,y]
+  &\sim f_{\beta\mid t_1\lambda_0,\lambda_1,x,y}(\beta\mid t_1\lambda_0,\lambda_1,x,y) \\
+  &\propto f_{\theta\mid x,y}(\theta\mid,x,y) \\
+  &\propto \frac{1}{\beta^5}\exp\left\{-\frac{\lambda_0 + \lambda_1 + 1}{\beta}\right\}.
+\end{split}
+$$
+The full conditional distribution for $\beta$ does not have known name, but we can still find the normalizing constant $c_\beta$
+$$
+ c_\beta = \int_0^\infty\frac{1}{\beta^5}\exp\left\{-\frac{\lambda_0 + \lambda_1 + 1}{\beta}\right\}\,d\beta = \frac{6}{(\lambda_0 + \lambda_1 + 1)^4},
+$$
+which gives the pdf
+$$
+  f_{\beta\mid t_1\lambda_0,\lambda_1,x,y}(\beta\mid t_1\lambda_0,\lambda_1,x,y) = \frac{(\lambda_0 + \lambda_1 + 1)^4}{6\beta^5}\exp\left\{-\frac{\lambda_0 + \lambda_1 + 1}{\beta}\right\}.
+$$
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
