@@ -268,11 +268,11 @@ From Figure \ref{fig:TraceplotTheta} the burn-in period seems to be no more than
 ```{r Block Gibbs sampler inference, fig.cap = "\\label{fig:HistogramOfTheThetaSamples}Histogram of the $\\theta$ samples."}
 n <- 5000
 Gibbs <- block_Gibbs(n, theta0, eta0, y)
-theta <- tail(Gibbs$theta, -100)  # theta values not containing the first 100
+thetaGibbs <- tail(Gibbs$theta, -100)  # Not containing the first 100 values
 
 # Plotting:
-as.data.frame(theta) %>%
-  ggplot(aes(x = theta, y = ..density..)) +
+as.data.frame(thetaGibbs) %>%
+  ggplot(aes(x = thetaGibbs, y = ..density..)) +
   geom_histogram(binwidth = 0.1, boundary = 0) +
   ggtitle("Histogram of the theta samples") +
   xlab("theta") +
@@ -296,11 +296,29 @@ CI_low <- eta_mean - z * sqrt(eta_var)  # Lower bound of confidence interval
 
 # Plotting:
 ggplot() +
-  geom_line(aes(x = t, y = eta_mean, col = "Mean")) +
-  geom_point(mapping = aes(x = t, y = y, col = "Observed data")) +
-  geom_line(aes(x = t, y = CI_upp, col = "95% confidence interval")) +
-  geom_line(aes(x = t, y = CI_low, col = "95% confidence interval")) +
-  geom_ribbon(aes(x = t, y = y, ymin = CI_low, ymax = CI_upp), fill = "red", alpha = 0.05) +
+  geom_line(aes(x = t,
+                y = eta_mean,
+                col = "Mean")
+            ) +
+  geom_point(aes(x = t,
+                 y = y,
+                 col = "Observed data")
+             ) +
+  geom_line(aes(x = t,
+                y = CI_upp,
+                col = "95% confidence interval")
+            ) +
+  geom_line(aes(x = t,
+                y = CI_low,
+                col = "95% confidence interval")
+            ) +
+  geom_ribbon(aes(x = t,
+                  y = y,
+                  ymin = CI_low,
+                  ymax = CI_upp),
+              fill = "red",
+              alpha = 0.05
+              ) +
   ylab("y") +
   ggtitle("Mean and confidence interval for the smooth effect") +
   theme_minimal() +
@@ -350,7 +368,7 @@ To test this we make a grid of $\theta$'s from 0 to 6 and find $\pi(\theta \mid 
 ```{r Plot posterior marginal, fig.cap = "\\label{fig:PosteriorMarginal}Posterior marginal for the hyperparameter both using block Gibbs sampling and INLA."}
 set.seed(69)
 
-# Using INLA:
+# Using INLA scheme:
 thetas <- seq(0, 6, 0.01)   # Grid of thetas
 post <- post_marg_theta(thetas, y)  # Un-normalized posterior marginal
 
@@ -359,15 +377,17 @@ k <- integrate(function(theta)(post_marg_theta(theta, y)),
                upper = Inf)$value
 post <- post / k    # Normalized posterior marginal
 
-# Histogram from block Gibbs sampling:
-n <- 5000
-Gibbs <- block_Gibbs(n, theta0, eta0, y)
-thetahist <- tail(Gibbs$theta, -100) 
-
 # Plotting:
 ggplot() +
-  geom_histogram(aes(x = thetahist, y = ..density..), binwidth = 0.1, boundary = 0) +
-  geom_line(aes(x = thetas, y = post, col = "Using INLA")) +
+  geom_histogram(aes(x = thetaGibbs,
+                     y = ..density..),
+                 binwidth = 0.1,
+                 boundary = 0
+                 ) +
+  geom_line(aes(x = thetas,
+                y = post,
+                col = "Using INLA\nscheme")
+            ) +
   xlab("theta") +
   ylab("pi(theta | y)") +
   ggtitle("Posterior marginal for the hyperparameter") +
@@ -383,13 +403,152 @@ In this problem we want to approximate the marginal posterior of the smooth effe
 $$
   \pi(\eta_t \mid \bfy) = \int_\RR \pi(\eta_t \mid \bfy, \theta) \pi(\theta \mid \bfy) \dtheta,
 $$
-for $t = 1, \dots, T$. We are interested in the marginal posterior of the smooth effect for $t = 10$, that is $\pi(\eta_{10} \mid \bfy)$.
+for $t = 1, \dots, T$. We are interested in the marginal posterior of the smooth effect for $t = 10$, that is $\pi(\eta_{10} \mid \bfy)$, and we approximate this as
+$$
+  \pi(\eta_{10} \mid \bfy) \approx \Delta \sum_{\theta \in \Theta} \pi(\eta_{10} \mid \bfy, \theta) \pi(\theta \mid \bfy).
+$$
+Here we denote the grid of $\theta$ values by $\Theta$, and the step size, which is in our case equal for each grid-point, by $\Delta$.
+
+In the following code block we firs make functions for $\pi(\eta_t \mid \bfy, \theta)$ and $\pi(\eta_t \mid \bfy)$, before we make grids and plot the result. We plot it together with the result from the block Gibbs sampling, and again we normalize the result from the INLA scheme, as it is simple to do in our case. This is shown in Figure \ref{fig:PosteriorMarginalSmoothEffect}, and we see that the two posterior marginals correspond well.
+
+```{r Posterior marginal smooth effect, fig.cap = "\\label{fig:PosteriorMarginalSmoothEffect}The posterior marginal for the smooth effect using the INLA scheme and using block Gibbs sampling."}
+# Using INLA scheme:
+pi_eta_given_theta_y <- function(y, theta, etas, t) {   # pi(eta | theta, y)
+  TT <- length(y)
+  Q <- Q_matrix(TT, theta)
+  inv <- solve(Q + diag(TT))
+  # eta | theta, y ~ Normal(inv * y, inv):
+  normal <- dnorm(etas, mean = (inv %*% y)[t], sd = sqrt(inv[t, t]))
+  return(normal)
+}
+
+post_marg_eta <- function(y, thetas, etas, t) {   # pi(eta | y)
+  res <- rep(0, length(etas))   # Initializing result to zero
+  Delta <- thetas[2] - thetas[1]  # Step size
+  post_theta <- post_marg_theta(thetas, y)  # pi(theta | y)
+  for (j in 1:length(thetas)) {   # Approximation of the integral
+    res <- res + Delta * pi_eta_given_theta_y(y, thetas[j], etas, t) * post_theta[j]
+  }
+  return(res)
+}
+
+# Un-normalized:
+etas <- seq(-3, 3, 0.01)    # Grid of etas
+thetas <- seq(0, 6, 0.01)   # Grid of thetas
+eta10 <- post_marg_eta(y, thetas, etas, 10)
+
+# Normalizing:
+k <- integrate(function(etas)(post_marg_eta(y, thetas, etas, 10)),
+               lower = -Inf,
+               upper = Inf)$value
+eta10 <- eta10 / k
+
+# From block Gibbs sampling:
+eta10Gibbs <- eta[, 10]
+
+# Plotting:
+ggplot() +
+  geom_histogram(mapping = aes(x = eta10Gibbs, y = ..density..),
+                 binwidth = 0.1,
+                 boundary = 0
+                 ) +
+  geom_line(aes(x = etas,
+                y = eta10,
+                col = "Using INLA\nscheme")
+            ) +
+  xlab("eta10") +
+  ylab("pi(eta10 | y)") +
+  ggtitle("Marginal posterior for the smooth effect for t = 10") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 5.
+We are now going to use the `R-INLA` library to do what we have done previously in this problem. We first perform the calculations using the `inla()` function in the following code block.
 
+```{r INLA}
+df <- data.frame(y = y, t = t)
+hyper <- list(theta = list(prior = "loggamma", param = c(1, 1)))
+formula <- y ~ f(t, model = "rw2", hyper = hyper, constr = FALSE) - 1
+res <- inla(formula = formula,
+            family = "gaussian",
+            data = df,
+            control.family = list(hyper = list(prec = list(initial = 0, fixed = TRUE))))
+```
+
+Firstly, we may then show the posterior marginal for the hyperparameter, as shown in Figure \ref{fig:INLAPosteriorMarginalTheta}. We see that there indeed is a close correspondence between the methods used.
+
+```{r INLA posterior marginal theta, fig.cap = "\\label{fig:INLAPosteriorMarginalTheta}The posterior marginal for the hyperparameter. It shows the results of the block Gibbs sampling, the INLA scheme, and the `R-INLA` package."}
+ggplot() +
+  geom_histogram(aes(x = thetaGibbs,
+                     y = ..density..),
+                 binwidth = 0.1,
+                 boundary = 0
+                 ) +
+  geom_line(aes(x = res$marginals.hyperpar$`Precision for t`[, 1],
+                y = res$marginals.hyperpar$`Precision for t`[, 2],
+                col = "Using R-INLA")
+            ) +
+  geom_line(aes(x = thetas,
+                y = post,
+                col = "Using INLA\nscheme"),
+            linetype = "dashed"
+            ) +
+  xlim(0, 7) +
+  ggtitle("Posterior marginal for the hyperparameter") +
+  xlab("theta") +
+  ylab("pi(theta | y)") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Secondly, we plot the mean of the smooth effect, as shown in Figure \ref{fig:INLAMeanOfSmoothEffect}. Also here we see a strong correspondence.
+
+```{r INLA mean smooth effect, fig.cap = "\\label{fig:INLAMeanOfSmoothEffect}The mean of the smooth effect. It shows the result using block Gibbs sampling and the `R-INLA` package."}
+ggplot() +
+  geom_line(aes(x = t,
+                y = res$summary.random$t$mean,
+                col = "Using R-INLA")
+            ) +
+  geom_line(aes(x = t,
+                y = eta_mean,
+                col = "Using block Gibbs"),
+            linetype = "dashed"
+            ) +
+  ylab("y") +
+  ggtitle("Mean for the smooth effect") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Lastly, we may use the result to plot the posterior marginal for the smooth effect, as shown in Figure \ref{fig:INLAPosteriorMarginalEta}. Finally we here see a good correspondence with the methods we used.
+
+```{r INLA posterior marginal eta10, fig.cap = "\\label{fig:INLAPosteriorMarginalEta}The posterior marginal for the smooth effect for $t=10$. It shows the results of the block Gibbs sampling, the INLA scheme, and the `R-INLA` package."}
+ggplot() +
+  geom_histogram(mapping = aes(x = eta10Gibbs, y = ..density..),
+                 binwidth = 0.1,
+                 boundary = 0
+                 ) +
+  geom_line(aes(x = res$marginals.random$t$index.10[, 1],
+                y = res$marginals.random$t$index.10[, 2],
+                col = "Using R-INLA")
+            ) +
+  geom_line(aes(x = etas,
+                y = eta10,
+                col = "Using INLA\nscheme"),
+            linetype = "dashed"
+            ) +
+  xlim(-3, 3) +
+  xlab("eta10") +
+  ylab("pi(eta10 | y)") +
+  ggtitle("Marginal posterior for the smooth effect for t = 10") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
