@@ -30,6 +30,7 @@ knitr::opts_chunk$set(
 \newcommand{\Uniform}{\operatorname{Uniform}}
 \newcommand{\Betadist}{\operatorname{Beta}}
 \newcommand{\Gammadist}{\operatorname{Gamma}}
+\newcommand{\InvGamma}{\operatorname{Inv-Gamma}}
 \newcommand{\Normal}{\operatorname{Normal}}
 \newcommand{\SD}{\operatorname{SD}}
 \newcommand{\RSS}{\mathrm{RSS}}
@@ -77,17 +78,17 @@ ggplot(cbind(coal, explosions = 1:nrow(coal)), aes(date, explosions)) +
 We assume the coal-mining disasters follow an inhomogeneous Poisson process with intensity function $\lambda(t)$ (number of events per year).
 We assume $\lambda(t)$ to be piecewise constant with $n$ breakpoints at times
 $t_k:k=1,\ldots,n$.
-We let $t_0=0$ and $t_{n+1}=T$ be the start and end times corresponding to 15 March, 1851 and 22 March, 1962, respectively, and let $0=t_0<t_1<t_2<\ldots<t_n<t_{n+1}=T$.
+We let $t_0$ and $t_{n+1}$ be the start and end times corresponding to 15 March, 1851 and 22 March, 1962, respectively, and let $t_0<t_1<t_2<\ldots<t_n<t_{n+1}$.
 Then the intensity function becomes
 \begin{equation}\label{eq:intensity}
   \lambda(t) = \begin{cases}
     \lambda_{k-1}, & \text{if}\,t\in[t_{k-1},t_k),\quad k=1,\ldots,n, \\
-    \lambda_n, & \text{if}\,t\in[t_n,T].
+    \lambda_n, & \text{if}\,t\in[t_n,t_{n+1}].
   \end{cases}
 \end{equation}
 
 Furthermore, let $x_k$ be the $y_k$-vector of the exact times when the disasters occurred in the time interval $[t_k, t_{k+1})$.
-We then let $x$ be the $y$-vector of the exact times when the disasters occurred in the whole time interval $[0, T]$, where $y = \sum_{k=0}^n y_k$.
+We then let $x$ be the $y$-vector of the exact times when the disasters occurred in the whole time interval $[t_0, t_{n+1}]$, where $y = \sum_{k=0}^n y_k$.
 We assume that the coal-mining disasters follow a hierarchical Bayesian structure, with
 \begin{equation}\label{eq:bayes-poisson}
   \begin{split}
@@ -110,14 +111,14 @@ $$
   f_{\theta\mid x,y}(\theta\mid x,y)
   &\propto f_{\theta, x,y}(\theta, x,y) \\
   &= f_{x,y\mid t_1,\lambda_0,\lambda_1}(x,y\mid t_1,\lambda_0,\lambda_1)\cdot f_{t_1}(t_1)\cdot f_{\lambda_0\mid \beta}(\lambda_0\mid\beta) \cdot f_{\lambda_1\mid \beta}(\lambda_1\mid\beta) \cdot f_\beta(\beta) \\
-  &\propto \lambda_0^{y_0}\exp(-\lambda_0t_1)\lambda_1^{y_1}\exp(-\lambda_1(T - t_1))\cdot\frac{1}{T}\cdot \frac{\lambda_0}{\beta^2}\e^{-\frac{\lambda_0}{\beta}}\cdot\frac{\lambda_1}{\beta^2}\e^{-\frac{\lambda_1}{\beta}}\cdot \frac{\exp\left(-\frac{1}{\beta}\right)}{\beta} \\
-  &\propto \frac{\lambda_0^{y_0 + 1}\lambda_1^{y_1 + 1}}{\beta^5}\exp\left\{-\left((\lambda_0 - \lambda_1)t_1 + \lambda_1T + \frac{1}{\beta}(\lambda_0 + \lambda_1 + 1)\right)\right\},\\
-  &\text{with}\quad \beta > 0,\; \lambda_0\geq0,\;\lambda_1\geq0\quad\text{and}\quad 0\leq t_1 \leq T.
+  &\propto \lambda_0^{y_0}\exp\{-\lambda_0(t_1 - t_0)\}\lambda_1^{y_1}\exp\{-\lambda_1(t_2 - t_1)\}\cdot\frac{1}{t_2 - t_0}\cdot \frac{\lambda_0}{\beta^2}\e^{-\frac{\lambda_0}{\beta}}\cdot\frac{\lambda_1}{\beta^2}\e^{-\frac{\lambda_1}{\beta}}\cdot \frac{\exp\left(-\frac{1}{\beta}\right)}{\beta} \\
+  &\propto \frac{\lambda_0^{y_0 + 1}\lambda_1^{y_1 + 1}}{\beta^5} \exp\left\{-\left(\lambda_0(t_1 - t_0) + \lambda_1(t_2 - t_1) + \frac{1}{\beta}(\lambda_0 + \lambda_1 + 1)\right)\right\},\\
+  &\text{with}\quad \beta > 0,\; \lambda_0\geq0,\;\lambda_1\geq0\quad\text{and}\quad t_0\leq t_1 \leq t_2.
 \end{split}
 $$
 That is, the posterior distribution is equal to
 \begin{equation}\label{eq:A-posterior}
-  f_{\theta\mid x,y}(\theta\mid x) = \frac{1}{c}\cdot \frac{\lambda_0^{y_0 + 1}\lambda_1^{y_1 + 1}}{\beta^5}\exp\left\{-\left((\lambda_0 - \lambda_1)t_1 + \lambda_1T + \frac{1}{\beta}(\lambda_0 + \lambda_1 + 1)\right)\right\},
+  f_{\theta\mid x,y}(\theta\mid x) = \frac{1}{c}\cdot \frac{\lambda_0^{y_0 + 1}\lambda_1^{y_1 + 1}}{\beta^5} \exp\left\{-\left(\lambda_0(t_1 - t_0) + \lambda_1(t_2 - t_1) + \frac{1}{\beta}(\lambda_0 + \lambda_1 + 1)\right)\right\},
 \end{equation}
 where $c$ is the normalizing constant.
 
@@ -129,36 +130,57 @@ We calculate the full conditional for each of the elements in $\theta$.
 $$
 \begin{split}
   [t_1\mid\lambda_0,\lambda_1,\beta,x,y]
-  &\sim f_{t_1\mid\lambda_0,\lambda_1,\beta,x,y}(t_1\mid\lambda_0,\lambda_1,\beta,x,y) \\
-  &\propto f_{\theta\mid x,y}(\theta\mid,x,y) \\
-  &\propto \exp\left\{-(\lambda_0 - \lambda_1)t_1\right\} \\
-  &\sim \Exp(\lambda_0 - \lambda_1); \\
-  [\lambda_0\mid t_1,\lambda_1,\beta,x,y] &\sim f_{\lambda_0\mid t_1,\lambda_1,\beta,x,y}(\lambda_0\mid t_1,\lambda_1,\beta,x,y) \\
-  &\propto f_{\theta\mid x,y}(\theta\mid,x,y) \\
-  &\propto \lambda_0^{(y_0 + 2) - 1}\exp\left\{-\left(t_1 + \frac{1}{\beta}\right)\lambda_0\right\} \\
-  &\sim\Gammadist\left(y_0 + 2, t_1 + \frac{1}{\beta}\right); \\
-  [\lambda_1\mid t_1,\lambda_0,\beta,x,y] &\sim f_{\lambda_1\mid t_1,\lambda_0,\beta,x,y}(\lambda_1\mid t_1,\lambda_0,\beta,x,y) \\
-  &\propto f_{\theta\mid x,y}(\theta\mid,x,y) \\
-  &\propto \lambda_1^{(y_1 + 2) - 1}\exp\left\{-\left(T - t_1 + \frac{1}{\beta}\right)\right\} \\
-  &\sim \Gammadist\left(y_1 + 2, T - t_1 + \frac{1}{\beta}\right); \\
+    &\sim f_{t_1\mid\lambda_0,\lambda_1,\beta,x,y}(t_1\mid\lambda_0,\lambda_1,\beta,x,y) \\
+    &\propto f_{\theta\mid x,y}(\theta\mid,x,y) \\
+    &\propto I_{(t_0, t_2)}(t_1)\cdot\exp\left\{-(\lambda_0 - \lambda_1)t_1\right\} \\
+    &\sim\text{Unknown distribution}; \\
+  [\lambda_0\mid t_1,\lambda_1,\beta,x,y]
+    &\sim f_{\lambda_0\mid t_1,\lambda_1,\beta,x,y}(\lambda_0\mid t_1,\lambda_1,\beta,x,y) \\
+    &\propto f_{\theta\mid x,y}(\theta\mid,x,y) \\
+    &\propto I_{[0,\infty)}(\lambda_0)\cdot\lambda_0^{(y_0 + 2) - 1}\exp\left\{-\left(t_1 - t_0 + \frac{1}{\beta}\right)\lambda_0\right\} \\
+    &\sim\Gammadist\left(y_0 + 2, t_1 - t_0 + \frac{1}{\beta}\right); \\
+  [\lambda_1\mid t_1,\lambda_0,\beta,x,y]
+    &\sim f_{\lambda_1\mid t_1,\lambda_0,\beta,x,y}(\lambda_1\mid t_1,\lambda_0,\beta,x,y) \\
+    &\propto I_{[0,\infty)}(\lambda_1)\cdot f_{\theta\mid x,y}(\theta\mid,x,y) \\
+    &\propto \lambda_1^{(y_1 + 2) - 1}\exp\left\{-\left(t_2 - t_1 + \frac{1}{\beta}\right)\lambda_1\right\} \\
+    &\sim \Gammadist\left(y_1 + 2, t_2 - t_1 + \frac{1}{\beta}\right); \\
   [\beta\mid t_1\lambda_0,\lambda_1,x,y]
-  &\sim f_{\beta\mid t_1\lambda_0,\lambda_1,x,y}(\beta\mid t_1\lambda_0,\lambda_1,x,y) \\
-  &\propto f_{\theta\mid x,y}(\theta\mid,x,y) \\
-  &\propto \frac{1}{\beta^5}\exp\left\{-\frac{\lambda_0 + \lambda_1 + 1}{\beta}\right\}.
+    &\sim f_{\beta\mid t_1\lambda_0,\lambda_1,x,y}(\beta\mid t_1\lambda_0,\lambda_1,x,y) \\
+    &\propto f_{\theta\mid x,y}(\theta\mid,x,y) \\
+    &\propto I_{(0,\infty)}(\beta)\cdot\beta^{-4-1}\exp\left\{-\frac{\lambda_0 + \lambda_1 + 1}{\beta}\right\} \\
+    &\sim \InvGamma(4, \lambda_0 + \lambda_1 + 1).
 \end{split}
 $$
-The full conditional distribution for $\beta$ does not have known name, but we can still find the normalizing constant $c_\beta$
-$$
- c_\beta = \int_0^\infty\frac{1}{\beta^5}\exp\left\{-\frac{\lambda_0 + \lambda_1 + 1}{\beta}\right\}\,d\beta = \frac{6}{(\lambda_0 + \lambda_1 + 1)^4},
-$$
-which gives the pdf
-$$
-  f_{\beta\mid t_1\lambda_0,\lambda_1,x,y}(\beta\mid t_1\lambda_0,\lambda_1,x,y) = \frac{(\lambda_0 + \lambda_1 + 1)^4}{6\beta^5}\exp\left\{-\frac{\lambda_0 + \lambda_1 + 1}{\beta}\right\}.
-$$
+
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 4.
+We implement a single site McMC algorithm for $f(\theta\mid x,y)$, where we need to do a Gibbs step for all the full conditionals except for $[t_1\mid\lambda_0,\lambda_1,\beta,x,y]$, where we will do a Metropolis Hastings step.
+Let $t = [t_1\mid\lambda_0,\lambda_1,\beta,x,y]$, and let $t^* = (t - t_0)/(t_2 - t_0)$ be the proposed values on the domain $(t_0, t_2)$ and $(0,1)$, respectively, and let $s$ be the current state of the Markov chain.
+We draw $t^*$ from the Beta distribution with parameters $(ns^*, n(1 - s^*))$, where $n$ is a tuning parameter. That is, the proposal distribution $Q(t\mid s)$ is given by
+$$
+ Q(t\mid s) \propto \frac{1}{B(ns^*, n(1 - s^*))}(t^*)^{ns^* - 1}(1 - t^*)^{n(1 - s^*) - 1},\quad s^* = \frac{s - t_0}{t_2 - t_0},\quad t^* = \frac{t - t_0}{t_2 - t_0},
+$$
+and the target distribution is given by
+$$
+  \pi(t) \propto \exp\{-\lambda t\} = \exp\{-\lambda(t_0 + t^*(t_2 - t_0))\}\propto \exp\{-\lambda t^*(t_2 - t_0)\},
+$$
+where $\lambda = \lambda_0 - \lambda_1$.
+The acceptance probability is given by
+$$
+\alpha(t\mid s) = \min\left\{1, \frac{\pi(t)\cdot Q(s\mid t)}{\pi(s)\cdot Q(t\mid s)}\right\}.
+$$
+We compute the ratio on log scale to avoid numerical instability.
+$$
+\begin{split}
+ \log\frac{\pi(t)\cdot Q(s\mid t)}{\pi(s)\cdot Q(t\mid s)}
+ &= \log\frac{\e^{-\lambda t^*(t_2 - t_0)}\cdot \frac{1}{B(nt^*, n(1 - t^*))}(s^*)^{nt^* - 1}(1 - s^*)^{n(1 - t^*) - 1}}{\e^{-\lambda s^*(t_2 - t_0)}\cdot \frac{1}{B(ns^*, n(1 - s^*))}(t^*)^{ns^* - 1}(1 - t^*)^{n(1 - s^*) - 1}} \\
+ &= -\lambda t^*(t_2 - t_0) - \log B(nt^*, n(1 - t^*)) + (nt^* - 1)\log s^* + (n(1 - t^*) - 1)\log(1 - s^*)\\
+ &\quad+\lambda s^*(t_2 - t_0) + \log B(ns^*, n(1 - s^*)) - (ns^* - 1)\log t^* - (n(1 - s^*) - 1)\log(1 - t^*).
+\end{split}
+$$
+
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
