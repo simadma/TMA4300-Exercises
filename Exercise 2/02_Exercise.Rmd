@@ -49,7 +49,7 @@ knitr::opts_chunk$set(
 ```{r libraries, eval = TRUE, echo = FALSE}
 library(tidyverse)  # Collection of R packages designed for data science
 
-library(lubridate)  # Make Dealing with Dates a Little Easier
+library(GGally)     # Extension to 'ggplot2'
 
 library(INLA)       # Full Bayesian Analysis of Latent Gaussian Models using Integrated
                     # Nested Laplace Approximations
@@ -108,7 +108,7 @@ We will in this problem assume $n=1$, such that the model parameters are $\theta
 The posterior distribution for $\theta$ given the observed data $x$ is then given by
 $$
 \begin{split}
-  f_{\theta\mid x,y}(\theta\mid x,y)
+  f_{\theta\mid x}(\theta\mid x)
   &\propto f_{\theta, x,y}(\theta, x,y) \\
   &= f_{x,y\mid t_1,\lambda_0,\lambda_1}(x,y\mid t_1,\lambda_0,\lambda_1)\cdot f_{t_1}(t_1)\cdot f_{\lambda_0\mid \beta}(\lambda_0\mid\beta) \cdot f_{\lambda_1\mid \beta}(\lambda_1\mid\beta) \cdot f_\beta(\beta) \\
   &\propto \lambda_0^{y_0}\exp\{-\lambda_0(t_1 - t_0)\}\lambda_1^{y_1}\exp\{-\lambda_1(t_2 - t_1)\}\cdot\frac{1}{t_2 - t_0}\cdot \frac{\lambda_0}{\beta^2}\e^{-\frac{\lambda_0}{\beta}}\cdot\frac{\lambda_1}{\beta^2}\e^{-\frac{\lambda_1}{\beta}}\cdot \frac{\exp\left(-\frac{1}{\beta}\right)}{\beta} \\
@@ -118,7 +118,7 @@ $$
 $$
 That is, the posterior distribution is equal to
 \begin{equation}\label{eq:A-posterior}
-  f_{\theta\mid x,y}(\theta\mid x) = \frac{1}{c}\cdot \frac{\lambda_0^{y_0 + 1}\lambda_1^{y_1 + 1}}{\beta^5} \exp\left\{-\left(\lambda_0(t_1 - t_0) + \lambda_1(t_2 - t_1) + \frac{1}{\beta}(\lambda_0 + \lambda_1 + 1)\right)\right\},
+  f_{\theta\mid x}(\theta\mid x) = \frac{1}{c}\cdot \frac{\lambda_0^{y_0 + 1}\lambda_1^{y_1 + 1}}{\beta^5} \exp\left\{-\left(\lambda_0(t_1 - t_0) + \lambda_1(t_2 - t_1) + \frac{1}{\beta}(\lambda_0 + \lambda_1 + 1)\right)\right\},
 \end{equation}
 where $c$ is the normalizing constant.
 
@@ -129,24 +129,24 @@ where $c$ is the normalizing constant.
 We calculate the full conditional for each of the elements in $\theta$.
 $$
 \begin{split}
-  [t_1\mid\lambda_0,\lambda_1,\beta,x,y]
-    &\sim f_{t_1\mid\lambda_0,\lambda_1,\beta,x,y}(t_1\mid\lambda_0,\lambda_1,\beta,x,y) \\
-    &\propto f_{\theta\mid x,y}(\theta\mid,x,y) \\
-    &\propto I_{(t_0, t_2)}(t_1)\cdot\exp\left\{-(\lambda_0 - \lambda_1)t_1\right\} \\
+  [t_1\mid\lambda_0,\lambda_1,\beta,x]
+    &\sim f_{t_1\mid\lambda_0,\lambda_1,\beta,x}(t_1\mid\lambda_0,\lambda_1,\beta,x) \\
+    &\propto f_{\theta\mid x}(\theta\mid x) \\
+    &\propto I_{(t_0, t_2)}(t_1)\cdot\lambda_0^{y_0 + 1}\lambda_1^{y_1 + 1}\exp\left\{-(\lambda_0 - \lambda_1)t_1\right\} \\
     &\sim\text{Unknown distribution}; \\
-  [\lambda_0\mid t_1,\lambda_1,\beta,x,y]
-    &\sim f_{\lambda_0\mid t_1,\lambda_1,\beta,x,y}(\lambda_0\mid t_1,\lambda_1,\beta,x,y) \\
-    &\propto f_{\theta\mid x,y}(\theta\mid,x,y) \\
+  [\lambda_0\mid t_1,\lambda_1,\beta,x]
+    &\sim f_{\lambda_0\mid t_1,\lambda_1,\beta,x}(\lambda_0\mid t_1,\lambda_1,\beta,x) \\
+    &\propto f_{\theta\mid x}(\theta\mid x) \\
     &\propto I_{[0,\infty)}(\lambda_0)\cdot\lambda_0^{(y_0 + 2) - 1}\exp\left\{-\left(t_1 - t_0 + \frac{1}{\beta}\right)\lambda_0\right\} \\
     &\sim\Gammadist\left(y_0 + 2, t_1 - t_0 + \frac{1}{\beta}\right); \\
-  [\lambda_1\mid t_1,\lambda_0,\beta,x,y]
-    &\sim f_{\lambda_1\mid t_1,\lambda_0,\beta,x,y}(\lambda_1\mid t_1,\lambda_0,\beta,x,y) \\
-    &\propto I_{[0,\infty)}(\lambda_1)\cdot f_{\theta\mid x,y}(\theta\mid,x,y) \\
+  [\lambda_1\mid t_1,\lambda_0,\beta,x]
+    &\sim f_{\lambda_1\mid t_1,\lambda_0,\beta,x}(\lambda_1\mid t_1,\lambda_0,\beta,x) \\
+    &\propto I_{[0,\infty)}(\lambda_1)\cdot f_{\theta\mid x}(\theta\mid x) \\
     &\propto \lambda_1^{(y_1 + 2) - 1}\exp\left\{-\left(t_2 - t_1 + \frac{1}{\beta}\right)\lambda_1\right\} \\
     &\sim \Gammadist\left(y_1 + 2, t_2 - t_1 + \frac{1}{\beta}\right); \\
-  [\beta\mid t_1\lambda_0,\lambda_1,x,y]
-    &\sim f_{\beta\mid t_1\lambda_0,\lambda_1,x,y}(\beta\mid t_1\lambda_0,\lambda_1,x,y) \\
-    &\propto f_{\theta\mid x,y}(\theta\mid,x,y) \\
+  [\beta\mid t_1\lambda_0,\lambda_1,x]
+    &\sim f_{\beta\mid t_1\lambda_0,\lambda_1,x}(\beta\mid t_1\lambda_0,\lambda_1,x) \\
+    &\propto f_{\theta\mid x}(\theta\mid x) \\
     &\propto I_{(0,\infty)}(\beta)\cdot\beta^{-4-1}\exp\left\{-\frac{\lambda_0 + \lambda_1 + 1}{\beta}\right\} \\
     &\sim \InvGamma(4, \lambda_0 + \lambda_1 + 1).
 \end{split}
@@ -156,41 +156,168 @@ $$
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 4.
-We implement a single site McMC algorithm for $f(\theta\mid x,y)$, where we need to do a Gibbs step for all the full conditionals except for $[t_1\mid\lambda_0,\lambda_1,\beta,x,y]$, where we will do a Metropolis Hastings step.
-Let $t = [t_1\mid\lambda_0,\lambda_1,\beta,x,y]$, and let $t^* = (t - t_0)/(t_2 - t_0)$ be the proposed values on the domain $(t_0, t_2)$ and $(0,1)$, respectively, and let $s$ be the current state of the Markov chain.
-We draw $t^*$ from the Beta distribution with parameters $(ns^*, n(1 - s^*))$, where $n$ is a tuning parameter. That is, the proposal distribution $Q(t\mid s)$ is given by
+We implement a single site McMC algorithm for $f(\theta\mid x)$, where we need to do a Gibbs step for all the full conditionals except for $[t_1\mid\lambda_0,\lambda_1,\beta,x]$, where we will do a Metropolis Hastings step. We choose a random walk proposal
+\begin{equation}\label{eq:Asingle-prop}
+[t_1^*\mid t_1^{(k)}]\sim\Normal(t_1^{(k)}, d),
+\end{equation}
+where $t_1^{(k)}$ is the current state of the Markov chain, and $d$ is a tuning parameter. We denote the proposal pdf by $Q(t_1^*\mid t_1^{(k)})$ and the target pdf by $\pi(t_1^{(k)}) = f_{t_1\mid \lambda_0,\lambda_1,\beta,x}(t_1^{(k)}\mid \lambda_0,\lambda_1,\beta,x)$. The acceptance probability is then given by
+\begin{equation}\label{eq:Asingleprop}
+  \alpha(t_1^*\mid t_1^{(k)}) = \min\left\{1, \frac{\pi(t_1^*)\cdot Q(t_1^{(k)}\mid t_1^*)}{\pi(t_1^{(k)})\cdot Q(t_1^*\mid t_1^{(k)})}\right\}.
+\end{equation}
+Since the proposal distribution is a symmetric, we have that $Q(t_1^*\mid t_1^{(k)}) = Q(t_1^{(k)}\mid t_1^*)$. What is left to do, is to compute the ratio of the target distribution. First we notice that the change point $t_1$ directly affects the event counts $y_0$ and $y_1$. That is,
 $$
- Q(t\mid s) \propto \frac{1}{B(ns^*, n(1 - s^*))}(t^*)^{ns^* - 1}(1 - t^*)^{n(1 - s^*) - 1},\quad s^* = \frac{s - t_0}{t_2 - t_0},\quad t^* = \frac{t - t_0}{t_2 - t_0},
+  y_0(t) = \sum_{x}I(x < t)\quad\text{and}\quad y_1(t) = y - t_0(t).
 $$
-and the target distribution is given by
-$$
-  \pi(t) \propto \exp\{-\lambda t\} = \exp\{-\lambda(t_0 + t^*(t_2 - t_0))\}\propto \exp\{-\lambda t^*(t_2 - t_0)\},
-$$
-where $\lambda = \lambda_0 - \lambda_1$.
-The acceptance probability is given by
-$$
-\alpha(t\mid s) = \min\left\{1, \frac{\pi(t)\cdot Q(s\mid t)}{\pi(s)\cdot Q(t\mid s)}\right\}.
-$$
-We compute the ratio on log scale to avoid numerical instability.
+Let $y_i^{*} = y_i(t_1^*)$ and $y_i^{(k)} = y_i(t_1^{(k)})$. We compute the ratio
+
 $$
 \begin{split}
- \log\frac{\pi(t)\cdot Q(s\mid t)}{\pi(s)\cdot Q(t\mid s)}
- &= \log\frac{\e^{-\lambda t^*(t_2 - t_0)}\cdot \frac{1}{B(nt^*, n(1 - t^*))}(s^*)^{nt^* - 1}(1 - s^*)^{n(1 - t^*) - 1}}{\e^{-\lambda s^*(t_2 - t_0)}\cdot \frac{1}{B(ns^*, n(1 - s^*))}(t^*)^{ns^* - 1}(1 - t^*)^{n(1 - s^*) - 1}} \\
- &= -\lambda t^*(t_2 - t_0) - \log B(nt^*, n(1 - t^*)) + (nt^* - 1)\log s^* + (n(1 - t^*) - 1)\log(1 - s^*)\\
- &\quad+\lambda s^*(t_2 - t_0) + \log B(ns^*, n(1 - s^*)) - (ns^* - 1)\log t^* - (n(1 - s^*) - 1)\log(1 - t^*).
+  \frac{\pi(t_1^*)}{\pi(t_1^{(k)})}
+  &= \exp\left\{\log\frac{\lambda_0^{y_0^* + 1}\lambda_1^{y_1^* + 1}\e^{-(\lambda_0 - \lambda_1)t_1^*}}{\lambda_0^{y_0^{(k)} + 1}\lambda_1^{y_1^{(k)} + 1}\e^{-(\lambda_0 - \lambda_1)t_1^{k}}}\right\} \\
+  &= \exp\left\{(y_0^* - y_0^{(k)})\log \lambda_0 + (y_1^* - y_1^{(k)})\log \lambda_1 -(\lambda_0 - \lambda_1)(t_1^* - t_1^{(k)})\right\},
 \end{split}
 $$
+which we insert into \eqref{eq:Asingleprop} to get the acceptance probability.
+
+```{r single-site McMC algorithm}
+# Samples from the posterior distribution using single site McMC
+# data:     number of observations
+# t_1:      initial changepoint
+# lambda_0: initial rateparameter
+# lambda_1: initial rateparameter
+# beta:     initial hyperparameter
+# d:        tuning parameter for the proposal distribution
+# n_iter:   number of iterations
+single_site_McMC <- function(data, t_1, lambda_0, lambda_1, beta, d = 1, n_iter = 5000) {
+  x <- data$date
+  y <- length(x)  # Number of disasters
+  t_0 <- x[1]     # Start date
+  t_2 <- x[y]     # End date
+  theta <- matrix(nrow = n_iter, ncol = 4,
+             dimnames = list(NULL, c("t_1", "lambda_0", "lambda_1", "beta"))
+           )
+  theta[1, ] <- c(t_1, lambda_0, lambda_1, beta)
+  y_0 <- sum(x < t_1)  # Number of disasters before t_1
+  y_1 <- y - y_0       # Number of disasters after t_1
+  if (n_iter > 1) {
+    for (i in 2:n_iter) {
+      # Metropolis Hastings step
+      t_star <- rnorm(1, mean = t_1, sd = d)  # Proposal
+      if (t_0 < t_star & t_star < t_2) {
+        y_0_star <- sum(x < t_star)  # Number of disasters before t_star
+        y_1_star <- y - y_0_star     # Number of disasters after t_star
+        alpha <- min(
+                   1,
+                   exp((y_0_star - y_0)*log(lambda_0) + (y_1_star - y_1)*log(lambda_1)
+                       - (lambda_0 - lambda_1)*(t_star - t_1))
+                 )
+        if (runif(1) < alpha) {
+          t_1 <- t_star
+          y_0 <- y_0_star
+          y_1 <- y_1_star
+        }
+      }
+      # Gibbs step, sample lambda_0
+      lambda_0 <- rgamma(1,
+                    shape = y_0 + 2,
+                    rate  = t_1 - t_0 + 1/beta
+                  )
+      # Gibbs step, sample lambda_1
+      lambda_1 <- rgamma(1,
+                    shape = y_1 + 2,
+                    rate  = t_2 - t_1 + 1/beta
+                  )
+      # Gibbs step, sample beta
+      beta <- 1 / rgamma(1,
+                    shape = 4,
+                    rate  = lambda_0 + lambda_1 + 1
+                  )
+      theta[i, ] <- c(t_1, lambda_0, lambda_1, beta)  # Update
+    }
+  }
+  as.data.frame(theta)
+}
+```
 
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 5.
+```{r run single-site, fig.cap="\\label{fig:single_site}Trace plot of two chains from different starting values using a single site McMC."}
+set.seed(731)
+# Trace plot function
+# ...: Takes the chains as input
+plot_trace <- function(...) {
+  input_list <- list(...)
+  n <- nrow(input_list[[1]])
+  nchains <- length(input_list)
+  bind_rows(..., .id = "chain") %>% 
+    mutate(n = rep(1:n, nchains)) %>% 
+    pivot_longer(c("t_1", "lambda_0", "lambda_1", "beta"), names_to = "parameter") %>% 
+    ggplot(aes(n, value, color = chain)) +
+    geom_line() +
+    facet_wrap(~ parameter, nrow = 4, scales = "free_y") +
+    theme_minimal()
+}
+
+# Sample two chains from different starting values
+n <- 5000
+theta1 <- single_site_McMC(coal, coal$date[1], 0.1, 10, 20, d = 10, n_iter = n)
+theta2 <- single_site_McMC(coal, coal$date[nrow(coal)], 30, 0.1, 2, d = 10, n_iter = n)
+plot_trace(theta1, theta2)
+```
+
+A trace plot of two chains from different starting values is shown in Figure \ref{fig:single_site}. It appears to converge instantly.
+We let the burn-in period be the 300 first steps to be sure.
+Figure \ref{fig:single_site_burnin} shows the same trace plot but now after discarding the burn-in period.
+The chain shows no trend.
+We only see a homogeneous band from each of the parameters.
+Looking specifically at the trace of $t_1$, it seems to be centered around 1890, which we anticipated by seeing a clear rate of change at the given point in Figure \ref{fig:coal}.
+We also see that $t_1$ mixes quite well in the limiting distribution, but not as good as the other parameters, due to its trace band being quite sparse.
+
+```{r single-site burnin,  fig.cap="\\label{fig:single_site_burnin}Trace plot of two chains from different starting values using a single site McMC after discarding the burn-in."}
+burnin <- 300
+plot_trace(theta1[-(1:burnin), ], theta2[-(1:burnin), ])
+```
+
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 6.
+The proposal distribution given by \eqref{eq:Asingleprop} has a tuning parameter $d$.
+In Figure \ref{fig:single_site} and \ref{fig:single_site_burnin}, the tuning parameter was set to $d=10$.
+We now try to set it at $d=1$ and $200$.
+The result is shown in Figure \ref{fig:single-site-tune}.
+For the parameters $\beta$ and $\lambda_1$, it is hard to see any difference.
+Looking at the other parameters, $t_1$ and $\lambda_0$ see that the two chains appear to mix after around $n=17500$ steps.
+We see a clear difference in the behavior of the two chains on the change point parameter $t_1$.
+The chain with $d=1$ takes very small frequent steps, and stays fixed around $t_1=1950$ for a long time.
+Looking at Figure \ref{fig:coal}, one can see a small change of rate, so it makes sense that the distribution of $t_1$ has a small mode at this position.
+It takes around $n=17500$ before it manages to explore the neighborhood around $t_1=1890$.
+The chain with $d=200$ takes very big steps, and therefore gets rejected almost all the time.
+It appears to be rejected up to $1000$ consecutive steps several times.
+
+```{r single-site tuning, fig.cap="\\label{fig:single-site-tune}Trace plots of two chains with tuning parameters $d=1$ and $d=200$ using single-site McMC."}
+set.seed(30)
+n_iter = 20000
+d <- c(1, 200)
+theta3 <- single_site_McMC(coal, coal$date[nrow(coal)], 10, 10, 10,  d[1], n_iter)
+theta4 <- single_site_McMC(coal, coal$date[nrow(coal)], 10, 10, 10,  d[2], n_iter)
+plot_trace(theta3, theta4) +
+  scale_color_hue(name = "d", labels = d)
+```
+
+Figure \ref{fig:single-site-tune-burnin} shows the same trace plot, but after discarding the burn-in period.
+We see that both of them has reached the limiting distribution, but they both yield a very poor mixing.
+
+```{r single-site tuning burn-in, fig.cap="\\label{fig:single-site-tune-burnin}Trace plots of two chains with tuning parameters $d=1$ and $d=200$ using single-site McMC after discarding the burn-in."}
+burnin <- 17500
+plot_trace(theta3[-(1:burnin), ], theta4[-(1:burnin), ]) +
+  scale_color_hue(name = "d", labels = d)
+```
+
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
