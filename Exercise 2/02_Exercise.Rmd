@@ -161,7 +161,7 @@ We implement a single site McMC algorithm for $f(\theta\mid x)$, where we need t
 [t_1^*\mid t_1^{(k)}]\sim\Normal(t_1^{(k)}, d),
 \end{equation}
 where $t_1^{(k)}$ is the current state of the Markov chain, and $d$ is a tuning parameter. We denote the proposal pdf by $Q(t_1^*\mid t_1^{(k)})$ and the target pdf by $\pi(t_1^{(k)}) = f_{t_1\mid \lambda_0,\lambda_1,\beta,x}(t_1^{(k)}\mid \lambda_0,\lambda_1,\beta,x)$. The acceptance probability is then given by
-\begin{equation}\label{eq:Asingleprop}
+\begin{equation}\label{eq:Asingle-accept}
   \alpha(t_1^*\mid t_1^{(k)}) = \min\left\{1, \frac{\pi(t_1^*)\cdot Q(t_1^{(k)}\mid t_1^*)}{\pi(t_1^{(k)})\cdot Q(t_1^*\mid t_1^{(k)})}\right\}.
 \end{equation}
 Since the proposal distribution is a symmetric, we have that $Q(t_1^*\mid t_1^{(k)}) = Q(t_1^{(k)}\mid t_1^*)$. What is left to do, is to compute the ratio of the target distribution. First we notice that the change point $t_1$ directly affects the event counts $y_0$ and $y_1$. That is,
@@ -177,7 +177,7 @@ $$
   &= \exp\left\{(y_0^* - y_0^{(k)})\log \lambda_0 + (y_1^* - y_1^{(k)})\log \lambda_1 -(\lambda_0 - \lambda_1)(t_1^* - t_1^{(k)})\right\},
 \end{split}
 $$
-which we insert into \eqref{eq:Asingleprop} to get the acceptance probability.
+which we insert into \eqref{eq:Asingle-accept} to get the acceptance probability.
 
 ```{r single-site McMC algorithm}
 # Samples from the posterior distribution using single site McMC
@@ -324,10 +324,152 @@ plot_trace(theta3[-(1:burnin), ], theta4[-(1:burnin), ]) +
 
 ## Subproblem 7.
 
+We will define and implement a block Metropolis-Hastings algorithm for $f_{\theta\mid x}(\theta\mid x)$ using two block proposals.
 
 ### Subsubproblem (a)
 
+We will use a block proposal $(t_1, \lambda_0, \lambda_1)$ keeping $\beta$ unchanged.
+That is, we generate a proposal $(t_1^*, \lambda_0^*, \lambda_1^*)$ by proposing $t_1$ as before according to \eqref{eq:Asingle-prop}.
+We then sample from the joint full conditional of $(\lambda_0^*,\lambda_1^*)$ including the new proposed value $t_1^*$. 
+The target distribution is given by
+
+$$
+\pi(t_1,\lambda_0,\lambda_1) \propto f_{\theta\mid x}(\theta\mid x)\propto\lambda_0^{y_0 + 1}\lambda_1^{y_1 + 1}\exp\left\{-\left(\lambda_0\left(t_1 - t_0 + \frac{1}{\beta}\right) + \lambda_1\left(t_2 - t_1 + \frac{1}{\beta}\right)\right)\right\},
+$$
+so the acceptance probability becomes
+
+$$
+\begin{split}
+  &\quad\alpha(t_1^*,\lambda_0^*,\lambda_1^*\mid t_1^{(k)},\lambda_0^{(k)},\lambda_1^{(k)}) \\
+  &=\min\left\{1, \frac{\pi(t_1^*,\lambda_0^*,\lambda_1^*)\cdot Q(t_1^{(k)},\lambda_0^{(k)},\lambda_1^{(k)}\mid t_1^*,\lambda_0^*,\lambda_1^*)}
+  {\pi(t_1^{(k)},\lambda_0^{(k)},\lambda_1^{(k)})\cdot Q(t_1^*,\lambda_0^*,\lambda_1^*\mid t_1^{(k)},\lambda_0^{(k)},\lambda_1^{(k)})}\right\} \\
+  &=\min\left\{1, \frac{\pi(t_1^*,\lambda_0^*,\lambda_1^*)\cdot\Gammadist\left(\lambda_0^{(k)};y_0^* + 2, t_1^* - t_0 + \frac{1}{\beta}\right)\Gammadist\left(\lambda_1^{(k)};y_1^* + 2, t_2 - t_1^* + \frac{1}{\beta}\right)}
+  {\pi(t_1^{(k)},\lambda_0^{(k)},\lambda_1^{(k)})\cdot\Gammadist\left(\lambda_0^*;y_0^{(k)} + 2, t_1^{(k)} - t_0 + \frac{1}{\beta}\right)\Gammadist\left(\lambda_1^*;y_1^{(k)} + 2, t_2 - t_1^{(k)} + \frac{1}{\beta}\right)}\right\},
+\end{split}
+$$
+where we have omitted the Normal proposal for $t_1^*$ because of the symmetry properties.
+
+```{r block1}
+# Computes the log target core of (t_1, lambda_0, lambda_1)
+# t_1:      initial changepoint
+# lambda_0: initial rateparameter
+# lambda_1: initial rateparameter
+# beta:     initial hyperparameter
+# y_0:      event count before t_1
+# y_1:      event count after t_1
+# t_0:      start time
+# t_2:      end time
+ltarget_1 <- function(t_1, lambda_0, lambda_1, beta, y_0, y_1, t_0, t_2) {
+  (y_0 + 1)*log(lambda_0) + (y_1 + 1)*log(lambda_1) -
+    (lambda_0*(t_1 - t_0 + 1/beta) + lambda_1*(t_2 - t_1 + 1/beta))
+}
+
+# Samples from the posterior distribution using block McMC
+# data:     number of observations
+# t_1:      initial changepoint
+# lambda_0: initial rateparameter
+# lambda_1: initial rateparameter
+# beta:     initial hyperparameter
+# d:        tuning parameter for the proposal distribution
+# n_iter:   number of iterations
+block_McMC_1 <- function(data, t_1, lambda_0, lambda_1, beta, d = 1, n_iter = 5000) {
+  x <- data$date
+  y <- length(x)  # Number of disasters
+  t_0 <- x[1]     # Start date
+  t_2 <- x[y]     # End date
+  theta <- matrix(nrow = n_iter, ncol = 4,
+                  dimnames = list(NULL, c("t_1", "lambda_0", "lambda_1", "beta"))
+  )
+  theta[1, ] <- c(t_1, lambda_0, lambda_1, beta)
+  y_0 <- sum(x < t_1)  # Number of disasters before t_1
+  y_1 <- y - y_0       # Number of disasters after t_1
+  if (n_iter > 1) {
+    for (i in 2:n_iter) {
+      # Metropolis Hastings step
+      t_star <- rnorm(1, mean = t_1, sd = d)  # Proposal
+      if (t_0 < t_star & t_star < t_2) {
+        y_0_star <- sum(x < t_star)  # Number of disasters before t_star
+        y_1_star <- y - y_0_star     # Number of disasters after t_star
+        # Proposal
+        lambda_0_star <- rgamma(1,
+                           shape = y_0_star + 2,
+                           rate  = t_star - t_0 + 1/beta
+                         )
+        # Proposal
+        lambda_1_star <- rgamma(1,
+                           shape = y_1_star + 2,
+                           rate  = t_2 - t_star + 1/beta
+                         )
+        # Log target ratio
+        ltarget_ratio <- ltarget_1(
+                           t_star, lambda_0_star, lambda_1_star, beta, y_0_star, y_1_star,
+                           t_0, t_2
+                         ) - ltarget_1(t_1, lambda_0, lambda_1, beta, y_0, y_1, t_0, t_2)
+        # Log proposal ratio
+        lprop_ratio <- dgamma(lambda_0,
+                         shape = y_0_star + 2,
+                         rate  = t_star - t_0 + 1/beta,
+                         log   = TRUE
+                       ) + dgamma(lambda_1,
+                             shape = y_1_star + 2,
+                             rate  = t_2 - t_star + 1/beta,
+                             log   = TRUE
+                           ) - dgamma(lambda_0,
+                                 shape = y_0 + 2,
+                                 rate  = t_1 - t_0 + 1/beta,
+                                 log   = TRUE
+                               ) - dgamma(lambda_1,
+                                     shape = y_1 + 2,
+                                     rate  = t_2 - t_1 + 1/beta,
+                                     log   = TRUE
+                                   )
+        alpha <- min(1, exp(ltarget_ratio + lprop_ratio))
+        if (runif(1) < alpha) {
+          # Accept proposals
+          t_1 <- t_star
+          y_0 <- y_0_star
+          y_1 <- y_1_star
+          lambda_0 <- lambda_0_star
+          lambda_1 <- lambda_1_star
+        }
+      }
+      # Gibbs step, sample beta
+      beta <- 1 / rgamma(1,
+                    shape = 4,
+                    rate  = lambda_0 + lambda_1 + 1
+                  )
+      theta[i, ] <- c(t_1, lambda_0, lambda_1, beta)  # Update
+    }
+  }
+  as.data.frame(theta)
+}
+```
+
+
 ### Subsubproblem (b)
+We will now instead use a block proposal $(\beta, \lambda_0, \lambda_1)$ keeping $t_1$ unchanged.
+That is, we generate a proposal $(\beta^*, \lambda_0^*, \lambda_1^*)$ by proposing $\beta^*$ from a normal distribution centered at the current state $\beta$, like we did previously with $t_1$.
+We then sample from the joint full conditional of $(\lambda_0^*,\lambda_1^*)$ including the new proposed value $\beta^*$.
+We will sample $t_1$ as before using the proposal distribution given by \eqref{eq:Asingle-prop}.
+The target distribution is given by
+
+$$
+\pi(\beta,\lambda_0,\lambda_1) \propto f_{\theta\mid x}(\theta\mid x)\propto\frac{\lambda_0^{y_0 + 1}\lambda_1^{y_1 + 1}}{\beta^5}\exp\left\{-\left(\lambda_0(t_1 - t_0) + \lambda_1(t_2 - t_1) + \frac{1}{\beta}(\lambda_0 + \lambda_1 + 1)\right)\right\},
+$$
+so the acceptance probability becomes
+
+$$
+\begin{split}
+  &\quad\alpha(\beta^*,\lambda_0^*,\lambda_1^*\mid \beta^{(k)},\lambda_0^{(k)},\lambda_1^{(k)}) \\
+  &=\min\left\{1, \frac{\pi(\beta^*,\lambda_0^*,\lambda_1^*)\cdot Q(\beta^{(k)},\lambda_0^{(k)},\lambda_1^{(k)}\mid \beta^*,\lambda_0^*,\lambda_1^*)}
+  {\pi(\beta^{(k)},\lambda_0^{(k)},\lambda_1^{(k)})\cdot Q(\beta^*,\lambda_0^*,\lambda_1^*\mid \beta^{(k)},\lambda_0^{(k)},\lambda_1^{(k)})}\right\} \\
+  &=\min\left\{1, \frac{\pi(\beta^*,\lambda_0^*,\lambda_1^*)\cdot\Gammadist\left(\lambda_0^{(k)};y_0 + 2, t_1 - t_0 + \frac{1}{\beta^*}\right)\Gammadist\left(\lambda_1^{(k)};y_1 + 2, t_2 - t_1 + \frac{1}{\beta^*}\right)}
+  {\pi(\beta^{(k)},\lambda_0^{(k)},\lambda_1^{(k)})\cdot\Gammadist\left(\lambda_0^*;y_0 + 2, t_1 - t_0 + \frac{1}{\beta^{(k)}}\right)\Gammadist\left(\lambda_1^*;y_1 + 2, t_2 - t_1 + \frac{1}{\beta^{(k)}}\right)}\right\},
+\end{split}
+$$
+where we have omitted the Normal proposal for $\beta^*$ because of the symmetry properties.
+
+
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
