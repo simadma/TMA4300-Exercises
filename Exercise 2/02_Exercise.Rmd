@@ -180,6 +180,27 @@ $$
 which we insert into \eqref{eq:Asingle-accept} to get the acceptance probability.
 
 ```{r single-site McMC algorithm}
+# Performs a Metropolis Hastiings step to sample t_1
+MH_t1 <- function(t_1, lambda_0, lambda_1, t_0, t_2, x, y_0, y_1, y, d) {
+  t_star <- rnorm(1, mean = t_1, sd = d)  # Proposal
+  if (t_0 < t_star & t_star < t_2) {
+    y_0_star <- sum(x < t_star)  # Number of disasters before t_star
+    y_1_star <- y - y_0_star     # Number of disasters after t_star
+    alpha <- min(
+      1,
+      exp((y_0_star - y_0)*log(lambda_0) + (y_1_star - y_1)*log(lambda_1)
+          - (lambda_0 - lambda_1)*(t_star - t_1))
+    )
+    if (runif(1) < alpha) {
+      # Accept
+      t_1 <- t_star
+      y_0 <- y_0_star
+      y_1 <- y_1_star
+    }
+  }
+  list(t_1 = t_1, y_0 = y_0, y_1 = y_1)
+}
+
 # Samples from the posterior distribution using single site McMC
 # data:     number of observations
 # t_1:      initial changepoint
@@ -202,37 +223,30 @@ single_site_McMC <- function(data, t_1, lambda_0, lambda_1, beta, d = 1, n_iter 
   if (n_iter > 1) {
     for (i in 2:n_iter) {
       # Metropolis Hastings step
-      t_star <- rnorm(1, mean = t_1, sd = d)  # Proposal
-      if (t_0 < t_star & t_star < t_2) {
-        y_0_star <- sum(x < t_star)  # Number of disasters before t_star
-        y_1_star <- y - y_0_star     # Number of disasters after t_star
-        alpha <- min(
-                   1,
-                   exp((y_0_star - y_0)*log(lambda_0) + (y_1_star - y_1)*log(lambda_1)
-                       - (lambda_0 - lambda_1)*(t_star - t_1))
-                 )
-        if (runif(1) < alpha) {
-          t_1 <- t_star
-          y_0 <- y_0_star
-          y_1 <- y_1_star
-        }
-      }
+      param <- MH_t1(t_1, lambda_0, lambda_1, t_0, t_2, x, y_0, y_1, y, d)
+      t_1 <- param$t_1
+      y_0 <- param$y_0
+      y_1 <- param$y_1
+      
       # Gibbs step, sample lambda_0
       lambda_0 <- rgamma(1,
                     shape = y_0 + 2,
                     rate  = t_1 - t_0 + 1/beta
                   )
+      
       # Gibbs step, sample lambda_1
       lambda_1 <- rgamma(1,
                     shape = y_1 + 2,
                     rate  = t_2 - t_1 + 1/beta
                   )
+      
       # Gibbs step, sample beta
       beta <- 1 / rgamma(1,
                     shape = 4,
                     rate  = lambda_0 + lambda_1 + 1
                   )
-      theta[i, ] <- c(t_1, lambda_0, lambda_1, beta)  # Update
+      # Update
+      theta[i, ] <- c(t_1, lambda_0, lambda_1, beta)
     }
   }
   as.data.frame(theta)
@@ -278,7 +292,11 @@ We also see that $t_1$ mixes quite well in the limiting distribution, but not as
 
 ```{r single-site burnin,  fig.cap="\\label{fig:single_site_burnin}Trace plot of two chains from different starting values using a single site McMC after discarding the burn-in."}
 burnin <- 300
-plot_trace(theta1[-(1:burnin), ], theta2[-(1:burnin), ])
+theta1 <- tail(theta1, -burnin)
+theta2 <- tail(theta2, -burnin)
+
+# Plot trace
+plot_trace(theta1, theta2)
 ```
 
 
@@ -286,7 +304,7 @@ plot_trace(theta1[-(1:burnin), ], theta2[-(1:burnin), ])
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 6.
-The proposal distribution given by \eqref{eq:Asingleprop} has a tuning parameter $d$.
+The proposal distribution given by \eqref{eq:Asingle-prop} has a tuning parameter $d$.
 In Figure \ref{fig:single_site} and \ref{fig:single_site_burnin}, the tuning parameter was set to $d=10$.
 We now try to set it at $d=1$ and $200$.
 The result is shown in Figure \ref{fig:single-site-tune}.
@@ -303,8 +321,12 @@ It appears to be rejected up to $1000$ consecutive steps several times.
 set.seed(30)
 n_iter = 20000
 d <- c(1, 200)
+
+# Sample two chains with different values for tuning parameter
 theta3 <- single_site_McMC(coal, coal$date[nrow(coal)], 10, 10, 10,  d[1], n_iter)
 theta4 <- single_site_McMC(coal, coal$date[nrow(coal)], 10, 10, 10,  d[2], n_iter)
+
+# Plot trace
 plot_trace(theta3, theta4) +
   scale_color_hue(name = "d", labels = d)
 ```
@@ -314,7 +336,11 @@ We see that both of them has reached the limiting distribution, but they both yi
 
 ```{r single-site tuning burn-in, fig.cap="\\label{fig:single-site-tune-burnin}Trace plots of two chains with tuning parameters $d=1$ and $d=200$ using single-site McMC after discarding the burn-in."}
 burnin <- 17500
-plot_trace(theta3[-(1:burnin), ], theta4[-(1:burnin), ]) +
+theta3 <- tail(theta3, -burnin)
+theta4 <- tail(theta4, -burnin)
+
+# Plot trace
+plot_trace(theta3, theta4) +
   scale_color_hue(name = "d", labels = d)
 ```
 
@@ -351,17 +377,62 @@ where we have omitted the Normal proposal for $t_1^*$ because of the symmetry pr
 
 ```{r block1}
 # Computes the log target core of (t_1, lambda_0, lambda_1)
-# t_1:      initial changepoint
-# lambda_0: initial rateparameter
-# lambda_1: initial rateparameter
-# beta:     initial hyperparameter
-# y_0:      event count before t_1
-# y_1:      event count after t_1
-# t_0:      start time
-# t_2:      end time
 ltarget_1 <- function(t_1, lambda_0, lambda_1, beta, y_0, y_1, t_0, t_2) {
   (y_0 + 1)*log(lambda_0) + (y_1 + 1)*log(lambda_1) -
     (lambda_0*(t_1 - t_0 + 1/beta) + lambda_1*(t_2 - t_1 + 1/beta))
+}
+
+# Performs a Metropolis Hastiings step to sample (t_1, lambda_0, lambda_1)
+MH_t1_lamb0_lamb1 <- function(t_1, lambda_0, lambda_1, beta, y_0, y_1, y, x, t_0, t_2, d)
+  {
+  t_star <- rnorm(1, mean = t_1, sd = d)  # Proposal
+  if (t_0 < t_star & t_star < t_2) {
+    y_0_star <- sum(x < t_star)  # Number of disasters before t_star
+    y_1_star <- y - y_0_star     # Number of disasters after t_star
+    # Proposal
+    lambda_0_star <- rgamma(1,
+                       shape = y_0_star + 2,
+                       rate  = t_star - t_0 + 1/beta
+                     )
+    # Proposal
+    lambda_1_star <- rgamma(1,
+                       shape = y_1_star + 2,
+                       rate  = t_2 - t_star + 1/beta
+                     )
+    # Log target ratio
+    ltarget_ratio <- ltarget_1(
+                       t_star, lambda_0_star, lambda_1_star, beta, y_0_star, y_1_star,
+                       t_0, t_2
+                     ) - ltarget_1(t_1, lambda_0, lambda_1, beta, y_0, y_1, t_0, t_2)
+    # Log proposal ratio
+    lprop_ratio <- dgamma(lambda_0,
+                     shape = y_0_star + 2,
+                     rate  = t_star - t_0 + 1/beta,
+                     log   = TRUE
+                   ) + dgamma(lambda_1,
+                         shape = y_1_star + 2,
+                         rate  = t_2 - t_star + 1/beta,
+                         log   = TRUE
+                       ) - dgamma(lambda_0,
+                             shape = y_0 + 2,
+                             rate  = t_1 - t_0 + 1/beta,
+                             log   = TRUE
+                           ) - dgamma(lambda_1,
+                                 shape = y_1 + 2,
+                                 rate  = t_2 - t_1 + 1/beta,
+                                 log   = TRUE
+                               )
+    alpha <- min(1, exp(ltarget_ratio + lprop_ratio))
+    if (runif(1) < alpha) {
+      # Accept proposals
+      t_1 <- t_star
+      y_0 <- y_0_star
+      y_1 <- y_1_star
+      lambda_0 <- lambda_0_star
+      lambda_1 <- lambda_1_star
+    }
+  }
+  list(t_1 = t_1, y_0 = y_0, y_1 = y_1, lambda_0 = lambda_0, lambda_1 = lambda_1)
 }
 
 # Samples from the posterior distribution using block McMC
@@ -386,53 +457,15 @@ block_McMC_1 <- function(data, t_1, lambda_0, lambda_1, beta, d = 1, n_iter = 50
   if (n_iter > 1) {
     for (i in 2:n_iter) {
       # Metropolis Hastings step
-      t_star <- rnorm(1, mean = t_1, sd = d)  # Proposal
-      if (t_0 < t_star & t_star < t_2) {
-        y_0_star <- sum(x < t_star)  # Number of disasters before t_star
-        y_1_star <- y - y_0_star     # Number of disasters after t_star
-        # Proposal
-        lambda_0_star <- rgamma(1,
-                           shape = y_0_star + 2,
-                           rate  = t_star - t_0 + 1/beta
-                         )
-        # Proposal
-        lambda_1_star <- rgamma(1,
-                           shape = y_1_star + 2,
-                           rate  = t_2 - t_star + 1/beta
-                         )
-        # Log target ratio
-        ltarget_ratio <- ltarget_1(
-                           t_star, lambda_0_star, lambda_1_star, beta, y_0_star, y_1_star,
-                           t_0, t_2
-                         ) - ltarget_1(t_1, lambda_0, lambda_1, beta, y_0, y_1, t_0, t_2)
-        # Log proposal ratio
-        lprop_ratio <- dgamma(lambda_0,
-                         shape = y_0_star + 2,
-                         rate  = t_star - t_0 + 1/beta,
-                         log   = TRUE
-                       ) + dgamma(lambda_1,
-                             shape = y_1_star + 2,
-                             rate  = t_2 - t_star + 1/beta,
-                             log   = TRUE
-                           ) - dgamma(lambda_0,
-                                 shape = y_0 + 2,
-                                 rate  = t_1 - t_0 + 1/beta,
-                                 log   = TRUE
-                               ) - dgamma(lambda_1,
-                                     shape = y_1 + 2,
-                                     rate  = t_2 - t_1 + 1/beta,
-                                     log   = TRUE
-                                   )
-        alpha <- min(1, exp(ltarget_ratio + lprop_ratio))
-        if (runif(1) < alpha) {
-          # Accept proposals
-          t_1 <- t_star
-          y_0 <- y_0_star
-          y_1 <- y_1_star
-          lambda_0 <- lambda_0_star
-          lambda_1 <- lambda_1_star
-        }
-      }
+      param <- MH_t1_lamb0_lamb1(
+                 t_1, lambda_0, lambda_1, beta, y_0, y_1, y, x, t_0, t_2, d
+               )
+      t_1 <- param$t_1
+      y_0 <- param$y_0
+      y_1 <- param$y_1
+      lambda_0 <- param$lambda_0
+      lambda_1 <- param$lambda_1
+      
       # Gibbs step, sample beta
       beta <- 1 / rgamma(1,
                     shape = 4,
@@ -469,7 +502,61 @@ $$
 $$
 where we have omitted the Normal proposal for $\beta^*$ because of the symmetry properties.
 
-```{r}
+```{r block2}
+# Computes the log target core of (beta, lambda_0, lambda_1)
+ltarget_2 <- function(t_1, lambda_0, lambda_1, beta, y_0, y_1, t_0, t_2) {
+  (y_0 + 1)*log(lambda_0) + (y_1 + 1)*log(lambda_1) - 5*log(beta) -
+    (lambda_0*(t_1 - t_0) + lambda_1*(t_2 - t_1) + 1/beta * (lambda_0 + lambda_1 + 1))
+}
+
+# Performs a Metropolis Hastiings step to sample (beta, lambda_0, lambda_1)
+MH_beta_lamb0_lamb1 <- function(t_1, lambda_0, lambda_1, beta, y_0, y_1, t_0, t_2, d) {
+  beta_star <- rnorm(1, mean = beta, sd = d)
+  if (beta_star > 0) {
+    # Proposal
+    lambda_0_star <- rgamma(1,
+                       shape = y_0 + 2,
+                       rate  = t_1 - t_0 + 1/beta_star
+                     )
+    # Proposal
+    lambda_1_star <- rgamma(1,
+                       shape = y_1 + 2,
+                       rate  = t_2 - t_1 + 1/beta_star
+                     )
+    # Log target ratio
+    ltarget_ratio <- ltarget_2(
+                       t_1, lambda_0_star, lambda_1_star, beta_star, y_0, y_1, t_0, t_2
+                     ) - ltarget_2(t_1, lambda_0, lambda_1, beta, y_0, y_1, t_0, t_2)
+    # Log proposal ratio
+    lprop_ratio <- dgamma(lambda_0,
+                     shape = y_0 + 2,
+                     rate  = t_1 - t_0 + 1/beta_star,
+                     log   = TRUE
+                   ) + dgamma(lambda_1,
+                         shape = y_1 + 2,
+                         rate  = t_2 - t_1 + 1/beta_star,
+                         log   = TRUE
+                       ) - dgamma(lambda_0,
+                             shape = y_0 + 2,
+                             rate  = t_1 - t_0 + 1/beta,
+                             log   = TRUE
+                           ) - dgamma(lambda_1,
+                                 shape = y_1 + 2,
+                                 rate  = t_2 - t_1 + 1/beta,
+                                 log   = TRUE
+                               )
+    alpha <- min(1, exp(ltarget_ratio + lprop_ratio))
+    if (runif(1) < alpha) {
+      # Accept proposals
+      beta <- beta_star
+      lambda_0 <- lambda_0_star
+      lambda_1 <- lambda_1_star
+    }
+  }
+  list(beta = beta, lambda_0 = lambda_0, lambda_1 = lambda_1)
+}
+
+
 # Samples from the posterior distribution using block McMC
 # data:     number of observations
 # t_1:      initial changepoint
@@ -501,7 +588,7 @@ block_McMC_2 <- function(
       y_1 <- param$y_1
       
       # Metropolis Hastings step, sample (beta, lambda_0, lambda_1)
-      param2 <- MH_beta_lamb1_lamb2(t_1, lambda_0, lambda_1, beta, y_0, y_1, t_0, t_2, d2)
+      param2 <- MH_beta_lamb0_lamb1(t_1, lambda_0, lambda_1, beta, y_0, y_1, t_0, t_2, d2)
       beta <- param2$beta
       lambda_0 <- param2$lambda_0
       lambda_1 <- param2$lambda_1
@@ -516,10 +603,71 @@ block_McMC_2 <- function(
 
 
 
-
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 8.
+```{r block1 sample, fig.cap="\\label{fig:A-block1}......"}
+set.seed(93)
+n_iter <- 5000
+d <- c(1, 10, 200)
+
+# Sample 3 chains with different values for tuning parameter
+theta5 <- block_McMC_1(coal, coal$date[nrow(coal)], 10, 10, 10, d[1], n_iter)
+theta6 <- block_McMC_1(coal, coal$date[nrow(coal)], 10, 10, 10, d[2], n_iter)
+theta7 <- block_McMC_1(coal, coal$date[nrow(coal)], 10, 10, 10, d[3], n_iter)
+
+# Plot trace
+plot_trace(theta5, theta6, theta7) + scale_color_hue(name = "d", labels = d)
+```
+
+```{r block1 burnin, fig.cap="\\label{fig:A-block1-burnin}......"}
+burnin <- 4000
+theta5 <- tail(theta5, -burnin)
+theta6 <- tail(theta6, -burnin)
+theta7 <- tail(theta7, -burnin)
+
+# Plot trace
+plot_trace(theta5, theta6, theta7) + scale_color_hue(name = "d", labels = d)
+```
+
+```{r block2 sample, fig.cap="\\label{fig:A-block2}......"}
+set.seed(12)
+
+# Sample chain with different values of tuning parameter
+theta8 <- block_McMC_2(coal, coal$date[nrow(coal)], 10, 10, 10, 10, d[1], n_iter)
+theta9 <- block_McMC_2(coal, coal$date[nrow(coal)], 10, 10, 10, 10, d[2], n_iter)
+theta10 <- block_McMC_2(coal, coal$date[nrow(coal)], 10, 10, 10, 10, d[3], n_iter)
+
+# Plot trace
+plot_trace(theta8, theta9, theta10) + scale_color_hue(name = "d", labels = d)
+```
+
+```{r block2 burnin, fig.cap="\\label{fig:A-block2-burnin}......"}
+burnin <- 1000
+theta8 <- tail(theta8, -burnin)
+theta9 <- tail(theta9, -burnin)
+theta10 <- tail(theta10, -burnin)
+
+# Plot trace
+plot_trace(theta8, theta9, theta10) + scale_color_hue(name = "d", labels = d)
+```
+
+
+```{r theta marginal densities, fig.cap="\\label{fig:theta-marginal}"}
+with(theta1, cov(lambda_0, lambda_1))
+
+theta1 %>% 
+  pivot_longer(everything(), names_to = "parameter") %>% 
+  group_by(parameter) %>% 
+  mutate(Expectation = mean(value)) %>% 
+  ggplot(aes(value)) +
+  geom_density() +
+  geom_vline(aes(xintercept = Expectation, color = factor(round(Expectation, 2)))) +
+  facet_wrap(~ parameter, nrow = 2, scales = "free") +
+  labs(color = "Expectation") +
+  theme_minimal()
+```
+
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
