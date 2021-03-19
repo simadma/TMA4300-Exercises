@@ -25,6 +25,7 @@ knitr::opts_chunk$set(echo = TRUE, tidy = FALSE, message = FALSE, warning = FALS
 \newcommand{\Exp}{\operatorname{Exponential}}
 \newcommand{\Uniform}{\operatorname{Uniform}}
 \newcommand{\Betadist}{\operatorname{Beta}}
+\newcommand{\Gammadist}{\operatorname{Gamma}}
 \newcommand{\Normal}{\operatorname{Normal}}
 \newcommand{\SD}{\operatorname{SD}}
 \newcommand{\RSS}{\mathrm{RSS}}
@@ -37,6 +38,11 @@ knitr::opts_chunk$set(echo = TRUE, tidy = FALSE, message = FALSE, warning = FALS
 \newcommand{\argmin}{\operatorname*{arg\,min}}
 \newcommand{\argmax}{\operatorname*{arg\,max}}
 \newcommand{\bfy}{\mathbf{y}}
+\newcommand{\bff}{\mathbf{f}}
+\newcommand{\bfzero}{\mathbf{0}}
+\newcommand{\bfeta}{\boldsymbol{\eta}}
+\newcommand{\dtheta}{\, \mathrm{d} \theta}
+\newcommand{\RR}{\mathbb{R}}
 \newcommand{\e}{\mathrm{e}}
 
 
@@ -45,6 +51,8 @@ library(tidyverse)  # Collection of R packages designed for data science
 
 library(INLA)       # Full Bayesian Analysis of Latent Gaussian Models using Integrated
                     # Nested Laplace Approximations
+library(mvtnorm)    # For multivariate normal distribution
+library(matrixStats)  # For column-wise variance of a matrix
 ```
 
 # Problem A: The coal-mining disaster data
@@ -96,28 +104,449 @@ library(INLA)       # Full Bayesian Analysis of Latent Gaussian Models using Int
 
 
 # Problem B: INLA for Gaussian Data
+We plot the dataset in the following code block, and the result is shown in Figure \ref{fig:TimesSeriesOfGaussianData}.
+
+```{r Plot Gaussian data, fig.width = 4, fig.height = 2, fig.cap = "\\label{fig:TimesSeriesOfGaussianData}The dataset \\texttt{Gaussiandata.txt} plotted."}
+# Importing the data and making relevant variables:
+path <- "https://www.math.ntnu.no/emner/TMA4300/2020v/Exercise/exercise2/Gaussiandata.txt"
+gauss_data <- read.delim(path, header = FALSE)  # There is no header in the dataset
+y <- gauss_data$V1    # Data values
+TT <- length(y)       # End point of the data
+t <- seq(1, TT, 1)    # A sequence from 1 to 20 for plotting
+
+# Plotting:
+ggplot(mapping = aes(t, y)) +
+  geom_point() +
+  ggtitle("Plot of the Gaussian data") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+[//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 1.
+We assume that, given $\bfeta = \begin{bmatrix} \eta_1 & \cdots & \eta_T \end{bmatrix}^\top$, the observations $y_t$ of the time series are independent and Gaussian distributed with mean $\eta_t$ and known unit variance. Furthermore, the linear predictor $\eta_t$ is linked to a smooth effect of time $t$ as $\eta_t = f_t$, where the vector $\bff = \begin{bmatrix} f_1 & \cdots & f_T \end{bmatrix}^\top$ is the latent field. Choosing a second order random walk model as a prior distribution for $\bff$ we get that $\bff \mid \theta \sim \Normal(\bfzero, Q(\theta)^{-1})$, for some precision matrix $Q(\theta)$. The model is completed by assigning the prior $\theta \sim \Gammadist(1, 1)$.
+
+The class of latent Gaussian models can be represented by a hierarchical structure containing three stages. In the case of this model it can be written in the stages
+$$
+  \bfy \mid \bff \sim \prod_{t=1}^T \pi(y_t \mid \eta_t),
+  \quad
+  \bff \mid \theta \sim \Normal(\bfzero, Q(\theta)^{-1})
+  \quad \text{and} \quad
+  \theta \sim \Gammadist(1, 1),
+$$
+where $Q(\theta)$ is the precision matrix, and $y_t \mid \eta_t \sim \Normal(\eta_t, 1)$, for $t = 1, \dots, T$. The field $\bff$ is also a Gaussian Markov random field, as can be seen from its distribution and the sparseness discussed below. Thus, because the model here can be written in the above form, it is a latent Gaussian model.
+
+INLA is applicable for use in latent Gaussian models under some constraints. Firstly, the hyperparameter vector cannot be to large, and in this model it is just a scalar, so this is satisfied. Secondly, the precision matrix needs to be sparse, which is the case for a second order random walk model. We look further at
+$$
+  \pi(\bff \mid \theta) \propto \theta^{(T-2)/2} \exp\left[ -\frac{\theta}{2} \sum_{t=3}^T (f_t - 2 f_{t-1} + f_{t-2})^2 \right] = \theta^{(T-2)/2} \exp\left[ -\frac{1}{2} \bff^\top Q(\theta) \bff \right],
+$$
+and want to determine $Q(\theta)$, so we look more at the exponent. We get that
+$$
+  \theta \sum_{t=3}^T (f_t - 2 f_{t-1} + f_{t-2})^2 = \theta \sum_{t=3}^T (f_t^2 + 4 f_{t-1}^2 + f_{t-2}^2 - 4 f_t f_{t-1} + 2 f_t f_{t-2} - 4 f_{t-1} f_{t-2}) = \bff^\top Q(\theta) \bff,
+$$
+with the precision matrix
+$$
+  Q(\theta) = \theta
+  \begin{bmatrix}
+    1 & -2 & 1 &  &  &  &  &  & 
+     \\
+    -2 & 5 & -4 & 1 &  &  &  &  & 
+     \\
+    1 & -4 & 6 & -4 & 1 &  &  &  & 
+     \\
+     & 1 & -4 & 6 & -4 & 1 &  &  & 
+     \\
+     &  & \ddots & \ddots & \ddots & \ddots & \ddots &  & 
+     \\
+     &  &  & 1 & -4 & 6 & -4 & 1 & 
+     \\
+     &  &  &  & 1 & -4 & 6 & -4 & 1
+     \\
+     &  &  &  &  & 1 & -4 & 5 & -2
+     \\
+     &  &  &  &  &  & 1 & -2 & 1
+     \\
+  \end{bmatrix},
+$$
+where the elements not filled in are zero, that is, a sparse matrix. There is also a multiplication, such that all elements gets a factor $\theta$.
+
+All the criteria to be able to use INLA is thus satisfied, and it can be applied to the model.
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 2.
+We now want to define and implement a block Gibbs sampling algorithm for $f(\bfeta, \theta \mid \bfy)$ by proposing a new value for $\theta$ from the full conditional $\pi(\theta \mid \bfeta, \bfy)$, and proposing a new value for $\bfeta$ from the full conditional $\pi(\bfeta \mid \theta, \bfy)$. Noting that $\bff = \bfeta$, we firstly have that
+\begin{align*}
+  f(\bfeta, \theta \mid \bfy) &\propto \pi(\bfy \mid \bfeta, \theta) \pi(\bfeta \mid \theta) \pi(\theta)
+  \\
+  &\propto \left\{ \prod_{t=1}^T \exp\left[ -\frac{1}{2} (y_t - \eta_t)^2 \right] \right\} \left\{ \theta^{(T-2)/2} \exp\left[ -\frac{\theta}{2} \sum_{t=3}^T (\eta_t - 2 \eta_{t-1} + \eta_{t-2})^2 \right] \right\} \exp(-\theta)
+  \\
+  &= \theta^{(T-2)/2} \exp\left[ -\theta - \frac{\theta}{2} \sum_{t=3}^T (\eta_t - 2 \eta_{t-1} + \eta_{t-2})^2 - \frac{1}{2} \sum_{t=1}^T (y_t - \eta_t)^2 \right],
+\end{align*}
+and we can from this find the full conditionals. This gives us
+$$
+  \pi(\theta \mid \bfeta, \bfy) \propto \theta^{(T-2)/2} \exp\left[ -\theta - \frac{\theta}{2} \sum_{t=3}^T (\eta_t - 2 \eta_{t-1} + \eta_{t-2})^2 \right] = \theta^{(T-2)/2} \exp\left[ -\theta - \frac{\theta}{2} \bfeta^\top Q(1) \bfeta \right],
+$$
+and we see that
+$$
+  \theta \mid \bfeta, \bfy \sim \Gammadist\left( \frac{T}{2}, 1 + \frac{1}{2} \bfeta^\top Q(1) \bfeta \right),
+$$
+where the gamma distribution is parameterized with the shape and rate parameter. We can also find
+\begin{align*}
+  \pi(\bfeta \mid \theta, \bfy) &\propto \exp\left[ -\frac{\theta}{2} \sum_{t=3}^T (\eta_t - 2 \eta_{t-1} + \eta_{t-2})^2 - \frac{1}{2} \sum_{t=1}^T (y_t - \eta_t)^2 \right]
+  \\
+  &= \exp\left[ -\frac{1}{2} \bfeta^\top Q(\theta) \bfeta - \frac{1}{2} (\bfy - \bfeta)^\top (\bfy - \bfeta) \right]
+  \\
+  &= \exp\left[ -\frac{1}{2} (\bfeta^\top Q(\theta) \bfeta + \bfeta^\top \bfeta + \bfy^\top \bfy) + \bfy^\top \bfeta \right]
+  \\
+  &\propto \exp\left[ \bfy^\top \bfeta - \frac{1}{2} \bfeta^\top (Q(\theta) + I) \bfeta \right],
+\end{align*}
+where $I \in \RR^{T \times T}$ is the identity matrix. It is then clear that
+$$
+  \bfeta \mid \theta, \bfy \sim \Normal((Q(\theta) + I)^{-1} \bfy, (Q(\theta) + I)^{-1}),
+$$
+because we recognize the canonical form of the Gaussian.
+
+We can then create the matrix $Q(\theta)$ as `Q(TT, theta)` in `R`, done in the following code block. Here we use that $Q(\theta) = \theta M^\top M$ for the matrix $M$ coming from the fact that we have $\sum_{t=3}^T (f_t - 2f_{t-1} + f_{t-2})^2$.
+
+```{r Define Q matrix}
+Q_matrix <- function(TT, theta) {
+  M <- matrix(0, nrow = TT, ncol = TT)  # Matrix of zeros of size TT times TT
+  for (i in 3:TT) { # Create M corresponding to RW2
+    M[i, c(i-2, i-1, i)] <- c(1, -2, 1)
+  }
+  return(theta * t(M) %*% M)  # Q(theta) = theta * M^T * M
+}
+```
+
+We can then create a function to sample using the block updating using Gibbs sampling. This is done in the following code block.
+
+```{r Block Gibbs sampler}
+block_Gibbs <- function(n, theta0, eta0, y) {
+  TT <- length(eta0)
+  theta <- rep(0, n)  # Initialize vector to store theta
+  eta <- matrix(0, nrow = n, ncol = TT)  # Initialize matrix to store eta (row-wise)
+  theta[1] <- theta0  # Initial value
+  eta[1, ] <- eta0    # Initial value
+  Q1 <- Q_matrix(TT, 1)  # Q(1)
+  for (i in 2:n) {
+    # Using old eta to find new theta from gamma distribution:
+    theta[i] <- rgamma(1, shape = TT/2, rate = 1 + 1/2 * eta[i-1, ] %*% Q1 %*% eta[i-1, ])
+    Qt <- Q_matrix(TT, theta[i])   # Using new theta to find Q(theta)
+    inv <- solve(Qt + diag(TT))    # (Q(theta) + I)^(-1)
+    eta[i, ] <- rmvnorm(1, inv %*% y, inv)  # Drawing from multivariate normal
+  }
+  return(list("theta" = theta, "eta" = eta))
+}
+```
+
+Now we may run the implementation done in the following code block. Here we initialize $\theta = 1$ and $\bfeta = \begin{bmatrix} 1 & \cdots & 1 \end{bmatrix}^\top$.
+
+```{r Testing block Gibbs sampler, fig.cap = "\\label{fig:TraceplotTheta}The traceplot of $\\theta$ giving an indication of the burn-in period."}
+set.seed(420)
+n <- 5000
+theta0 <- 1         # Initial value
+eta0 <- rep(1, TT)  # Initial value
+
+Gibbs <- block_Gibbs(n, theta0, eta0, y)
+theta <- Gibbs$theta    # theta values from Gibbs sampling
+
+# Plotting:
+as.data.frame(theta) %>%
+  ggplot(aes(x = seq(1, n, 1), y = theta)) +
+  geom_line() +
+  ggtitle("Traceplot of theta") +
+  xlab("Iteration") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+From Figure \ref{fig:TraceplotTheta} the burn-in period seems to be no more than 50, but to be conservative, we disregard the 100 first iterations. Knowing this, we discard the first 100 iterations. This is done in the following code block.
+
+```{r Block Gibbs sampler inference, fig.cap = "\\label{fig:HistogramOfTheThetaSamples}Histogram of the $\\theta$ samples."}
+thetaGibbs <- tail(theta, -100)  # Not containing the first 100 values
+
+# Plotting:
+as.data.frame(thetaGibbs) %>%
+  ggplot(aes(x = thetaGibbs, y = ..density..)) +
+  geom_histogram(binwidth = 0.1, boundary = 0) +
+  ggtitle("Histogram of the theta samples") +
+  xlab("theta") +
+  ylab("Density") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Figure \ref{fig:HistogramOfTheThetaSamples} shows a simulated histogram of the $\theta$ samples from the block Gibbs sampler. This is an approximation of the posterior marginal for the hyperparameter, $\pi(\theta \mid \bfy)$.
+
+We can now calculate the mean and 95% confidence interval of the smooth effect. This is done in the following code block, and the result is shown in Figure \ref{fig:ObservedDataWithMeanAndCI}. From this we see that almost all the data points are within the confidence interval.
+
+```{r Mean and CI of smooth effect, fig.cap = "\\label{fig:ObservedDataWithMeanAndCI}The mean and the 95% confidence interval for the smooth effect."}
+eta <- tail(Gibbs$eta, -100)  # eta values from Gibbs sampler omitting the first 100
+eta_mean <- colMeans(eta) # Column-wise mean of eta
+eta_var <- colVars(eta)   # Column-wise variance of eta
+
+z <- qnorm(0.025)   # z-value for 95% confidence interval
+CI_upp <- eta_mean + z * sqrt(eta_var)  # Upper bound of confidence interval
+CI_low <- eta_mean - z * sqrt(eta_var)  # Lower bound of confidence interval
+
+# Plotting:
+ggplot() +
+  geom_line(aes(x = t,
+                y = eta_mean,
+                col = "Mean")
+            ) +
+  geom_point(aes(x = t,
+                 y = y,
+                 col = "Observed data")
+             ) +
+  geom_line(aes(x = t,
+                y = CI_upp,
+                col = "95% confidence interval")
+            ) +
+  geom_line(aes(x = t,
+                y = CI_low,
+                col = "95% confidence interval")
+            ) +
+  geom_ribbon(aes(x = t,
+                  y = y,
+                  ymin = CI_low,
+                  ymax = CI_upp),
+              fill = "red",
+              alpha = 0.05
+              ) +
+  ylab("y") +
+  ggtitle("Mean and confidence interval for the smooth effect") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 3.
+We now want to approximate the posterior marginal for the hyperparameter using INLA. We have that
+$$
+  \pi(\theta \mid \bfy) \propto \frac{\pi(\bfy \mid \bfeta, \theta) \pi(\bfeta \mid \theta) \pi(\theta)}{\pi(\bfeta \mid \theta, \bfy)},
+$$
+where we previously found that $\bfeta \mid \theta, \bfy \sim \Normal((Q(\theta) + I)^{-1} \bfy, (Q(\theta) + I)^{-1})$, and also the other quantities are known up to a proportionality constant. We thus have that
+\begin{align*}
+  \pi(\theta \mid \bfy) &\propto \frac{\exp\left[ -\frac{1}{2} (\bfeta - \bfy)^\top (\bfeta - \bfy) \right] \theta^{(T-2)/2} \exp\left[  -\frac{1}{2} \bfeta^\top Q(\theta) \bfeta \right] \exp(-\theta)}{\det(Q(\theta) + I)^{1/2} \exp\left\{ -\frac{1}{2} [\bfeta - (Q(\theta) + I)^{-1} \bfy]^\top (Q(\theta) + I) [\bfeta - (Q(\theta) + I)^{-1} \bfy] \right\}}
+  \\
+  &= \theta^{(T-2)/2} \det(Q(\theta) + I)^{-1/2}
+  \\
+  &\phantom{=} \cdot \exp\left\{ -\theta - \frac{1}{2} (\bfeta - \bfy)^\top (\bfeta - \bfy) - \frac{1}{2} \bfeta^\top Q(\theta) \bfeta + \frac{1}{2} [\bfeta - (Q(\theta) + I)^{-1} \bfy]^\top (Q(\theta) + I) [\bfeta - (Q(\theta) + I)^{-1} \bfy] \right\}
+  \\
+  &\propto \theta^{(T-2)/2} \det(Q(\theta) + I)^{-1/2} \exp\left[ -\theta - \frac{1}{2} \bfy^\top \bfy + \frac{1}{2} \bfy^\top (Q(\theta) + I)^{-1} \bfy \right]
+  \\
+  &= \theta^{(T-2)/2} \det(Q(\theta) + I)^{-1/2} \exp\left\{ -\theta - \frac{1}{2} \bfy^\top [I - (Q(\theta) + I)^{-1}] \bfy \right\},
+\end{align*}
+where we have used that $(Q(\theta) + I)^\top = Q(\theta)^\top + I^\top = Q(\theta) + I$, because $Q(\theta)$ is symmetric. We can then based on this simulate the posterior marginal for the hyperparameter as done in the following code block.
+
+```{r Posterior marginal}
+post_marg_theta <- function(thetas, y) {
+  post <- rep(0, length(thetas))
+  TT <- length(y)
+  for (i in 1:length(post)) {
+    theta <- thetas[i]
+    Q <- Q_matrix(TT, theta)
+    QpI <- Q + diag(TT)
+    post[i] <- theta^(TT/2-1) * det(QpI)^(-1/2) *
+               exp(-theta - 1/2 * t(y) %*% (diag(TT) - solve(QpI)) %*% y)
+  }
+  return(post)
+}
+```
+
+To test this we make a grid of $\theta$'s from 0 to 6 and find $\pi(\theta \mid \bfy)$ on this grid. We could just plot this and see that the form is the same as the one we obtained in Figure \ref{fig:HistogramOfTheThetaSamples}. However, for this simple example it is easy to find the normalizing constant by integration. Doing this, and plotting together with the previously found histogram, we get Figure \ref{fig:PosteriorMarginal}. We see that there is a strong correspondence between the two.
+
+```{r Plot posterior marginal, fig.cap = "\\label{fig:PosteriorMarginal}Posterior marginal for the hyperparameter both using block Gibbs sampling and INLA."}
+set.seed(420)
+
+# Using INLA scheme:
+thetas <- seq(0, 6, 0.01)   # Grid of thetas
+post <- post_marg_theta(thetas, y)  # Un-normalized posterior marginal
+
+k <- integrate(function(theta)(post_marg_theta(theta, y)),
+               lower = 0,
+               upper = Inf)$value
+post <- post / k    # Normalized posterior marginal
+
+# Plotting:
+ggplot() +
+  geom_histogram(aes(x = thetaGibbs,
+                     y = ..density..),
+                 binwidth = 0.1,
+                 boundary = 0
+                 ) +
+  geom_line(aes(x = thetas,
+                y = post,
+                col = "Using INLA\nscheme")
+            ) +
+  xlab("theta") +
+  ylab("pi(theta | y)") +
+  ggtitle("Posterior marginal for the hyperparameter") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 4.
+In this problem we want to approximate the marginal posterior of the smooth effect given by
+$$
+  \pi(\eta_t \mid \bfy) = \int_\RR \pi(\eta_t \mid \bfy, \theta) \pi(\theta \mid \bfy) \dtheta,
+$$
+for $t = 1, \dots, T$. We are interested in the marginal posterior of the smooth effect for $t = 10$, that is $\pi(\eta_{10} \mid \bfy)$, and we approximate this as
+$$
+  \pi(\eta_{10} \mid \bfy) \approx \Delta \sum_{\theta \in \Theta} \pi(\eta_{10} \mid \bfy, \theta) \pi(\theta \mid \bfy).
+$$
+Here we denote the grid of $\theta$ values by $\Theta$, and the step size, which is in our case equal for each grid-point, by $\Delta$.
+
+In the following code block we first make functions for $\pi(\eta_t \mid \bfy, \theta)$ and $\pi(\eta_t \mid \bfy)$, before we make grids and plot the result. We plot it together with the result from the block Gibbs sampling, and again we normalize the result from the INLA scheme, as it is simple to do in our case. This is shown in Figure \ref{fig:PosteriorMarginalSmoothEffect}, and we see that the two posterior marginals correspond well.
+
+```{r Posterior marginal smooth effect, fig.cap = "\\label{fig:PosteriorMarginalSmoothEffect}The posterior marginal for the smooth effect using the INLA scheme and using block Gibbs sampling."}
+# Using INLA scheme:
+pi_eta_given_theta_y <- function(y, theta, etas, t) {   # pi(eta_t | theta, y)
+  TT <- length(y)
+  Q <- Q_matrix(TT, theta)
+  inv <- solve(Q + diag(TT))
+  # eta_t | theta, y ~ Normal(inv * y, inv):
+  normal <- dnorm(etas, mean = (inv %*% y)[t], sd = sqrt(inv[t, t]))
+  return(normal)
+}
+
+post_marg_eta <- function(y, thetas, etas, t) {   # pi(eta_t | y)
+  res <- rep(0, length(etas))   # Initializing result to zero
+  Delta <- thetas[2] - thetas[1]  # Step size
+  post_theta <- post_marg_theta(thetas, y)  # pi(theta | y)
+  for (j in 1:length(thetas)) {   # Approximation of the integral
+    res <- res + Delta * pi_eta_given_theta_y(y, thetas[j], etas, t) * post_theta[j]
+  }
+  return(res)
+}
+
+# Un-normalized:
+etas <- seq(-3, 3, 0.01)    # Grid of etas
+thetas <- seq(0, 6, 0.01)   # Grid of thetas
+eta10 <- post_marg_eta(y, thetas, etas, 10)
+
+# Normalizing:
+k <- integrate(function(etas)(post_marg_eta(y, thetas, etas, 10)),
+               lower = -Inf,
+               upper = Inf)$value
+eta10 <- eta10 / k
+
+# From block Gibbs sampling:
+eta10Gibbs <- eta[, 10]
+
+# Plotting:
+ggplot() +
+  geom_histogram(mapping = aes(x = eta10Gibbs, y = ..density..),
+                 binwidth = 0.1,
+                 boundary = 0
+                 ) +
+  geom_line(aes(x = etas,
+                y = eta10,
+                col = "Using INLA\nscheme")
+            ) +
+  xlab("eta10") +
+  ylab("pi(eta10 | y)") +
+  ggtitle("Marginal posterior for the smooth effect for t = 10") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 5.
+We are now going to use the `R-INLA` library to do what we have done previously in this problem. We first perform the calculations using the `inla()` function in the following code block.
+
+```{r INLA}
+df <- data.frame(y = y, t = t)
+hyper <- list(theta = list(prior = "loggamma", param = c(1, 1)))
+formula <- y ~ f(t, model = "rw2", hyper = hyper, constr = FALSE) - 1
+res <- inla(formula = formula,
+            family = "gaussian",
+            data = df,
+            control.family = list(hyper = list(prec = list(initial = 0, fixed = TRUE))))
+```
+
+Firstly, we may then show the posterior marginal for the hyperparameter, as shown in Figure \ref{fig:INLAPosteriorMarginalTheta}. We see that there indeed is a close correspondence between the methods used.
+
+```{r INLA posterior marginal theta, fig.cap = "\\label{fig:INLAPosteriorMarginalTheta}The posterior marginal for the hyperparameter. It shows the results of the block Gibbs sampling, the INLA scheme, and the `R-INLA` package."}
+ggplot() +
+  geom_histogram(aes(x = thetaGibbs,
+                     y = ..density..),
+                 binwidth = 0.1,
+                 boundary = 0
+                 ) +
+  geom_line(aes(x = res$marginals.hyperpar$`Precision for t`[, 1],
+                y = res$marginals.hyperpar$`Precision for t`[, 2],
+                col = "Using R-INLA")
+            ) +
+  geom_line(aes(x = thetas,
+                y = post,
+                col = "Using INLA\nscheme"),
+            linetype = "dashed"
+            ) +
+  xlim(0, 7) +
+  ggtitle("Posterior marginal for the hyperparameter") +
+  xlab("theta") +
+  ylab("pi(theta | y)") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Secondly, we plot the mean of the smooth effect, as shown in Figure \ref{fig:INLAMeanOfSmoothEffect}. Also here we see a strong correspondence.
+
+```{r INLA mean smooth effect, fig.cap = "\\label{fig:INLAMeanOfSmoothEffect}The mean of the smooth effect. It shows the result using block Gibbs sampling and the `R-INLA` package."}
+ggplot() +
+  geom_line(aes(x = t,
+                y = res$summary.random$t$mean,
+                col = "Using R-INLA")
+            ) +
+  geom_line(aes(x = t,
+                y = eta_mean,
+                col = "Using block Gibbs"),
+            linetype = "dashed"
+            ) +
+  ylab("y") +
+  ggtitle("Mean for the smooth effect") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Lastly, we may use the result to plot the posterior marginal for the smooth effect, as shown in Figure \ref{fig:INLAPosteriorMarginalEta}. Finally we here see a good correspondence with the methods we used.
+
+```{r INLA posterior marginal eta10, fig.cap = "\\label{fig:INLAPosteriorMarginalEta}The posterior marginal for the smooth effect for $t=10$. It shows the results of the block Gibbs sampling, the INLA scheme, and the `R-INLA` package."}
+ggplot() +
+  geom_histogram(mapping = aes(x = eta10Gibbs, y = ..density..),
+                 binwidth = 0.1,
+                 boundary = 0
+                 ) +
+  geom_line(aes(x = res$marginals.random$t$index.10[, 1],
+                y = res$marginals.random$t$index.10[, 2],
+                col = "Using R-INLA")
+            ) +
+  geom_line(aes(x = etas,
+                y = eta10,
+                col = "Using INLA\nscheme"),
+            linetype = "dashed"
+            ) +
+  xlim(-3, 3) +
+  xlab("eta10") +
+  ylab("pi(eta10 | y)") +
+  ggtitle("Marginal posterior for the smooth effect for t = 10") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
