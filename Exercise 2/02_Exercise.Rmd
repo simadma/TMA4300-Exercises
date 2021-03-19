@@ -135,7 +135,7 @@ $$
   \quad \text{and} \quad
   \theta \sim \Gammadist(1, 1),
 $$
-where $Q$ is the precision matrix, and $y_t \mid \eta_t \sim \Normal(\eta_t, 1)$, for $t = 1, \dots, T$. The field $\bff$ is also a Gaussian Markov random field, as can be seen from its distribution and the sparseness discussed below. Thus, because the model here can be written in the above form, it is a latent Gaussian model.
+where $Q(\theta)$ is the precision matrix, and $y_t \mid \eta_t \sim \Normal(\eta_t, 1)$, for $t = 1, \dots, T$. The field $\bff$ is also a Gaussian Markov random field, as can be seen from its distribution and the sparseness discussed below. Thus, because the model here can be written in the above form, it is a latent Gaussian model.
 
 INLA is applicable for use in latent Gaussian models under some constraints. Firstly, the hyperparameter vector cannot be to large, and in this model it is just a scalar, so this is satisfied. Secondly, the precision matrix needs to be sparse, which is the case for a second order random walk model. We look further at
 $$
@@ -193,7 +193,7 @@ and we see that
 $$
   \theta \mid \bfeta, \bfy \sim \Gammadist\left( \frac{T}{2}, 1 + \frac{1}{2} \bfeta^\top Q(1) \bfeta \right),
 $$
-where we use the shape and rate parameter. We can also find
+where the gamma distribution is parameterized with the shape and rate parameter. We can also find
 \begin{align*}
   \pi(\bfeta \mid \theta, \bfy) &\propto \exp\left[ -\frac{\theta}{2} \sum_{t=3}^T (\eta_t - 2 \eta_{t-1} + \eta_{t-2})^2 - \frac{1}{2} \sum_{t=1}^T (y_t - \eta_t)^2 \right]
   \\
@@ -214,7 +214,7 @@ We can then create the matrix $Q(\theta)$ as `Q(TT, theta)` in `R`, done in the 
 ```{r Define Q matrix}
 Q_matrix <- function(TT, theta) {
   M <- matrix(0, nrow = TT, ncol = TT)  # Matrix of zeros of size TT times TT
-  for (i in 3:TT) { # Create two matrices corresponding to RW2 to be multiplied
+  for (i in 3:TT) { # Create M corresponding to RW2
     M[i, c(i-2, i-1, i)] <- c(1, -2, 1)
   }
   return(theta * t(M) %*% M)  # Q(theta) = theta * M^T * M
@@ -230,12 +230,12 @@ block_Gibbs <- function(n, theta0, eta0, y) {
   eta <- matrix(0, nrow = n, ncol = TT)  # Initialize matrix to store eta (row-wise)
   theta[1] <- theta0  # Initial value
   eta[1, ] <- eta0    # Initial value
+  Q1 <- Q_matrix(TT, 1)  # Q(1)
   for (i in 2:n) {
-    Q <- Q_matrix(TT, 1)  # Q(1)
     # Using old eta to find new theta from gamma distribution:
-    theta[i] <- rgamma(1, shape = TT/2, rate = 1 + 1/2 * eta[i-1, ] %*% Q %*% eta[i-1, ])
-    Q <- Q_matrix(TT, theta[i])   # Using new theta to find Q(theta)
-    inv <- solve(Q + diag(TT))    # (Q + I)^{-1}
+    theta[i] <- rgamma(1, shape = TT/2, rate = 1 + 1/2 * eta[i-1, ] %*% Q1 %*% eta[i-1, ])
+    Qt <- Q_matrix(TT, theta[i])   # Using new theta to find Q(theta)
+    inv <- solve(Qt + diag(TT))    # (Q(theta) + I)^(-1)
     eta[i, ] <- rmvnorm(1, inv %*% y, inv)  # Drawing from multivariate normal
   }
   return(list("theta" = theta, "eta" = eta))
@@ -245,8 +245,8 @@ block_Gibbs <- function(n, theta0, eta0, y) {
 Now we may run the implementation done in the following code block. Here we initialize $\theta = 1$ and $\bfeta = \begin{bmatrix} 1 & \cdots & 1 \end{bmatrix}^\top$.
 
 ```{r Testing block Gibbs sampler, fig.cap = "\\label{fig:TraceplotTheta}The traceplot of $\\theta$ giving an indication of the burn-in period."}
-set.seed(69)
-n <- 1000
+set.seed(420)
+n <- 5000
 theta0 <- 1         # Initial value
 eta0 <- rep(1, TT)  # Initial value
 
@@ -263,12 +263,10 @@ as.data.frame(theta) %>%
   theme(plot.title = element_text(hjust = 0.5))
 ```
 
-From Figure \ref{fig:TraceplotTheta} the burn-in period seems to be no more than 50, but to be conservative, we disregard the 100 first iterations. Knowing this, we run the chain for $n = 5000$ iterations, and discard the first 100 iterations. This is done in the following code block.
+From Figure \ref{fig:TraceplotTheta} the burn-in period seems to be no more than 50, but to be conservative, we disregard the 100 first iterations. Knowing this, we discard the first 100 iterations. This is done in the following code block.
 
 ```{r Block Gibbs sampler inference, fig.cap = "\\label{fig:HistogramOfTheThetaSamples}Histogram of the $\\theta$ samples."}
-n <- 5000
-Gibbs <- block_Gibbs(n, theta0, eta0, y)
-thetaGibbs <- tail(Gibbs$theta, -100)  # Not containing the first 100 values
+thetaGibbs <- tail(theta, -100)  # Not containing the first 100 values
 
 # Plotting:
 as.data.frame(thetaGibbs) %>%
@@ -366,7 +364,7 @@ post_marg_theta <- function(thetas, y) {
 To test this we make a grid of $\theta$'s from 0 to 6 and find $\pi(\theta \mid \bfy)$ on this grid. We could just plot this and see that the form is the same as the one we obtained in Figure \ref{fig:HistogramOfTheThetaSamples}. However, for this simple example it is easy to find the normalizing constant by integration. Doing this, and plotting together with the previously found histogram, we get Figure \ref{fig:PosteriorMarginal}. We see that there is a strong correspondence between the two.
 
 ```{r Plot posterior marginal, fig.cap = "\\label{fig:PosteriorMarginal}Posterior marginal for the hyperparameter both using block Gibbs sampling and INLA."}
-set.seed(69)
+set.seed(420)
 
 # Using INLA scheme:
 thetas <- seq(0, 6, 0.01)   # Grid of thetas
@@ -409,20 +407,20 @@ $$
 $$
 Here we denote the grid of $\theta$ values by $\Theta$, and the step size, which is in our case equal for each grid-point, by $\Delta$.
 
-In the following code block we firs make functions for $\pi(\eta_t \mid \bfy, \theta)$ and $\pi(\eta_t \mid \bfy)$, before we make grids and plot the result. We plot it together with the result from the block Gibbs sampling, and again we normalize the result from the INLA scheme, as it is simple to do in our case. This is shown in Figure \ref{fig:PosteriorMarginalSmoothEffect}, and we see that the two posterior marginals correspond well.
+In the following code block we first make functions for $\pi(\eta_t \mid \bfy, \theta)$ and $\pi(\eta_t \mid \bfy)$, before we make grids and plot the result. We plot it together with the result from the block Gibbs sampling, and again we normalize the result from the INLA scheme, as it is simple to do in our case. This is shown in Figure \ref{fig:PosteriorMarginalSmoothEffect}, and we see that the two posterior marginals correspond well.
 
 ```{r Posterior marginal smooth effect, fig.cap = "\\label{fig:PosteriorMarginalSmoothEffect}The posterior marginal for the smooth effect using the INLA scheme and using block Gibbs sampling."}
 # Using INLA scheme:
-pi_eta_given_theta_y <- function(y, theta, etas, t) {   # pi(eta | theta, y)
+pi_eta_given_theta_y <- function(y, theta, etas, t) {   # pi(eta_t | theta, y)
   TT <- length(y)
   Q <- Q_matrix(TT, theta)
   inv <- solve(Q + diag(TT))
-  # eta | theta, y ~ Normal(inv * y, inv):
+  # eta_t | theta, y ~ Normal(inv * y, inv):
   normal <- dnorm(etas, mean = (inv %*% y)[t], sd = sqrt(inv[t, t]))
   return(normal)
 }
 
-post_marg_eta <- function(y, thetas, etas, t) {   # pi(eta | y)
+post_marg_eta <- function(y, thetas, etas, t) {   # pi(eta_t | y)
   res <- rep(0, length(etas))   # Initializing result to zero
   Delta <- thetas[2] - thetas[1]  # Step size
   post_theta <- post_marg_theta(thetas, y)  # pi(theta | y)
