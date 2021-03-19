@@ -187,7 +187,7 @@ $$
 which we insert into \eqref{eq:Asingle-accept} to get the acceptance probability.
 
 ```{r single-site McMC algorithm}
-# Performs a Metropolis Hastiings step to sample t_1
+# Performs a Metropolis Hastings step to sample t_1
 MH_t1 <- function(t_1, lambda_0, lambda_1, t_0, t_2, x, y_0, y_1, y, d) {
   accept <- 0
   t_star <- rnorm(1, mean = t_1, sd = d)  # Proposal
@@ -441,7 +441,7 @@ ltarget_2 <- function(t_1, lambda_0, lambda_1, beta, y_0, y_1, t_0, t_2) {
     (lambda_0*(t_1 - t_0) + lambda_1*(t_2 - t_1) + 1/beta * (lambda_0 + lambda_1 + 1))
 }
 
-# Performs a Metropolis Hastiings step to sample (t_1, lambda_0, lambda_1)
+# Performs a Metropolis Hastings step to sample (t_1, lambda_0, lambda_1)
 MH_t1_lamb0_lamb1 <- function(t_1, lambda_0, lambda_1, beta, y_0, y_1, y, x, t_0, t_2, d)
 {
   accept <- 0
@@ -497,7 +497,7 @@ MH_t1_lamb0_lamb1 <- function(t_1, lambda_0, lambda_1, beta, y_0, y_1, y, x, t_0
        accept = accept)
 }
 
-# Performs a Metropolis Hastiings step to sample (beta, lambda_0, lambda_1)
+# Performs a Metropolis Hastings step to sample (beta, lambda_0, lambda_1)
 MH_beta_lamb0_lamb1 <- function(t_1, lambda_0, lambda_1, beta, y_0, y_1, t_0, t_2, d) {
   accept <- 0
   beta_star <- rnorm(1, mean = beta, sd = d)
@@ -608,66 +608,50 @@ block_McMC <- function(data, t_1, lambda_0, lambda_1, beta, d1 = 1, d2 = 1, n_it
 
 ## Subproblem 8.
 
-We sample three chains using the block McMC by keeping the tuning parameter ofwith three different values for the tuning parameter from the variance of the Normal proposal of $t_1$.
-The values are $d=1,10,200$.
-The result is seen in Figure \ref{fig:A-block1}.
-The chains with the tuning parameter $d=10$ and $200$ mixes almost instantly, while the chain with tuning parameter $d=1$ does not mix until after $n=4000$ steps.
-```{r block1 sample, fig.cap="\\label{fig:A-block1}Trace plots of three chains with tuning parameters $d=1, 10$ and $200$ using block proposal for $(t_1, \\lambda_0, \\lambda_1)$."}
+Figure \ref{fig:A-block1} shows a nine chains with combinations of different tuning parameters for $\beta$ in the first proposal block, and for $t_1$ in the second proposal block.
+We see that three of the chains did not converge.
+We will eliminate these, together with the chains that had an acceptance probability less than $15\%$, which leaves the second chain with $(d_t, t_\beta) = (10, 1)$ with a burn-in period of about $n=500$.
+
+```{r block1 sample, fig.cap="\\label{fig:A-block1}Trace plots of nine chains with blocking proposals with different tuning parameter values"}
 set.seed(93)
 n_iter <- 5000
-d <- c(1, 10, 200)
+d1 <- c(1, 10, 200)
+d2 <- c(1, 2, 10)
+d_grid <- expand.grid(d1, d2)
+lab <- with(d_grid, paste0("(", Var1, ", ", Var2, ")"))
 
 # Sample 3 chains with different values for tuning parameter
-
-theta5 <- block_McMC(coal, coal$date[nrow(coal)], 10, 10, 10, d[1], d[1], n_iter)
-theta6 <- block_McMC(coal, coal$date[nrow(coal)], 10, 10, 10, d[2], d[1], n_iter)
-theta7 <- block_McMC(coal, coal$date[nrow(coal)], 10, 10, 10, d[3], d[1], n_iter)
+theta5 <- block_McMC(coal, coal$date[nrow(coal)], 10, 10, 10, d1[1], d2[1], n_iter)
+theta6 <- block_McMC(coal, coal$date[nrow(coal)], 10, 10, 10, d1[2], d2[1], n_iter)
+theta7 <- block_McMC(coal, coal$date[nrow(coal)], 10, 10, 10, d1[3], d2[1], n_iter)
+theta8 <- block_McMC(coal, coal$date[nrow(coal)], 10, 10, 10, d1[1], d2[2], n_iter)
+theta9 <- block_McMC(coal, coal$date[nrow(coal)], 10, 10, 10, d1[2], d2[2], n_iter)
+theta10 <- block_McMC(coal, coal$date[nrow(coal)], 10, 10, 10, d1[3], d2[2], n_iter)
+theta11 <- block_McMC(coal, coal$date[nrow(coal)], 10, 10, 10, d1[1], d2[3], n_iter)
+theta12 <- block_McMC(coal, coal$date[nrow(coal)], 10, 10, 10, d1[2], d2[3], n_iter)
+theta13 <- block_McMC(coal, coal$date[nrow(coal)], 10, 10, 10, d1[3], d2[3], n_iter)
 
 # Plot trace
-plot_trace(theta5, theta6, theta7) + scale_color_hue(name = "d_t", labels = d)
+plot_trace(theta5, theta6, theta7, theta8, theta9, theta10, theta11, theta12, theta13) +
+  scale_color_hue(name = "(d_t, d_beta)", labels = lab)
 ```
 
-Figure \ref{fig:A-block1-burnin} shows the same trace plot but after discarding the burn-in.
-We see that the chain with $d=200$ yields a poor mixing due to the proposal values constantly getting rejected.
-The chain with $d=1$ is moving slowly in $t_1$, but performs better on the other parameters.
-The chain with $d=10$ shows a combination of the patterns of the other two chains.
+We now compare the single-site chain with tuning parameter $d=10$ and our candidate from the block proposal chain. We see that the single-site chain explores more of the domain.
+A possibility is that there is a computational error in the acceptance probability for the block proposal.
+However, they both yield a quite good mixing, but not perfect, as $t_1$ looks a bit sparse.
 
-```{r block1 burnin, fig.cap="\\label{fig:A-block1-burnin}Trace plots of three chains with tuning parameters $d=1, 10$ and $200$ using block proposal for $(t_1, \\lambda_0, \\lambda_1)$ after discarding the burn-in."}
-burnin <- 4000
-theta5 <- tail(theta5, -burnin)
+```{r block1 burnin, fig.cap="\\label{fig:A-block1-burnin}The best candidate of the chains with blocking proposals and the single-site proposal chain."}
+burnin <- 500
 theta6 <- tail(theta6, -burnin)
-theta7 <- tail(theta7, -burnin)
+
+theta1 <- tail(theta1, nrow(theta6))
 
 # Plot trace
-plot_trace(theta5, theta6, theta7) + scale_color_hue(name = "d_t", labels = d)
+plot_trace(theta1, theta6) + scale_color_hue(labels = c("Single-site", "Block"))
 ```
 
-We use the single-site chain to estimate the marginal posterior distributions $f_{t_1\mid x}(t_1\mid x)$, $f_{\lambda_0\mid x}(\lambda_0\mid x)$, $f_{\lambda_1\mid x}(\lambda_1\mid x)$ and $f_{\beta\mid x}(\beta\mid x)$ and their expected values.
-The result is seen in Figure \ref{fig:theta-marginal}, showing the most interesting result of $\E[t_1\mid x] = 1890.61$, which coincides with our expectation.
-The expected rates before and after $\E[t_1\mid x]$ shows that the rate decreases by $2.2$ disasters per year, which is a huge improvement(although not ideal) in the safety of the coal-miners.
-
-
-```{r}
-set.seed(93)
-
-# Sample 3 chains with different values for tuning parameter d_beta
-theta8 <- block_McMC(coal, coal$date[nrow(coal)], 10, 10, 10, d[2], d[1], n_iter)
-theta9 <- block_McMC(coal, coal$date[nrow(coal)], 10, 10, 10, d[2], d[2], n_iter)
-theta10 <- block_McMC(coal, coal$date[nrow(coal)], 10, 10, 10, d[2], d[3], n_iter)
-
-# Plot trace
-plot_trace(theta8, theta9, theta10) + scale_color_hue(name = "d_beta", labels = d)
-```
-
-```{r}
-burnin <- 4000
-theta8 <- tail(theta8, -burnin)
-theta9 <- tail(theta9, -burnin)
-theta10 <- tail(theta10, -burnin)
-
-# Plot trace
-plot_trace(theta8, theta9, theta10) + scale_color_hue(name = "d_beta", labels = d)
-```
+We use the single-site chain to estimate the marginal posterior density of each of the variables.
+Figure \ref{fig:theta-marginal} shows that the expected change point is at $t_1=1890.66$, where the disasters per year is reduced from $\lambda_0=3.14$ to $\lambda_1=0.95$, which is a major improvement for the coal miners, although still not ideal.
 
 ```{r theta marginal densities, fig.cap="\\label{fig:theta-marginal}Estimated marginal posterior distributions from single-site McMC, with the empirical mean."}
 theta1 %>% 
@@ -682,8 +666,9 @@ theta1 %>%
   theme_minimal()
 ```
 
-The scatter plot of $[\lambda_0,\lambda_1\mid x]$ is shown in Figure \ref{fig:A-cov-lamb} also showing $\Cov[\lambda_0,\lambda_1\mid x]$. Since we are condition It is very low, and there is shows a small correlation.
-```{r, fig.width=3.5, fig.asp=1, fig.cap="\\label{fig:A-cov-lamb}Scatter plot of $[\\lambda_0 \\mid x]$ and $[\\lambda_1 \\mid x]$ with their respective covariance."}
+The scatter plot of $[\lambda_0,\lambda_1\mid x]$ is shown in Figure \ref{fig:A-cov-lamb} also showing $\Cov[\lambda_0,\lambda_1\mid x]$. We see that there is a very small correlation.
+
+```{r, fig.width=3.5, fig.asp=1, fig.cap="\\label{fig:A-cov-lamb}Scatter plot of $[\\lambda_0 \\mid x]$ and $[\\lambda_1 \\mid x]$ and their covariance."}
 theta1 %>% 
   ggplot(aes(lambda_0, lambda_1)) +
   geom_point() +
