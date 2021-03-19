@@ -16,8 +16,7 @@ library(rmarkdown)  # Dynamic Documents for R
 library(knitr)  # A General-Purpose Package for Dynamic Report Generation in R
 knitr::opts_chunk$set(
   echo = TRUE, tidy = FALSE, message = FALSE, warning = FALSE, strip.white = TRUE,
-  prompt = FALSE, cache = TRUE, size = "scriptsize", fig.width = 6, fig.height = 4,
-  fig.align = 'center'
+  prompt = FALSE, cache = TRUE, size = "scriptsize", fig.width = 6, fig.height = 4
 )
 ```
 
@@ -1130,6 +1129,8 @@ ggplot() +
   theme(plot.title = element_text(hjust = 0.5))
 ```
 
+
+# References
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 [//]: # ----------------------------------------------------------------------------------------------------------------
