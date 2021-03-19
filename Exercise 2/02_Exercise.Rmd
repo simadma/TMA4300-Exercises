@@ -148,8 +148,8 @@ $$
     &\sim\Gammadist\left(y_0 + 2, t_1 - t_0 + \frac{1}{\beta}\right); \\
   [\lambda_1\mid t_1,\lambda_0,\beta,x]
     &\sim f_{\lambda_1\mid t_1,\lambda_0,\beta,x}(\lambda_1\mid t_1,\lambda_0,\beta,x) \\
-    &\propto I_{[0,\infty)}(\lambda_1)\cdot f_{\theta\mid x}(\theta\mid x) \\
-    &\propto \lambda_1^{(y_1 + 2) - 1}\exp\left\{-\left(t_2 - t_1 + \frac{1}{\beta}\right)\lambda_1\right\} \\
+    &\propto f_{\theta\mid x}(\theta\mid x) \\
+    &\propto I_{[0,\infty)}(\lambda_1)\cdot \lambda_1^{(y_1 + 2) - 1}\exp\left\{-\left(t_2 - t_1 + \frac{1}{\beta}\right)\lambda_1\right\} \\
     &\sim \Gammadist\left(y_1 + 2, t_2 - t_1 + \frac{1}{\beta}\right); \\
   [\beta\mid t_1\lambda_0,\lambda_1,x]
     &\sim f_{\beta\mid t_1\lambda_0,\lambda_1,x}(\beta\mid t_1\lambda_0,\lambda_1,x) \\
