@@ -8,6 +8,8 @@ output:
   html_document:
     df_print: paged
 subtitle: TMA4300 Computer Intensive Statistical Models
+urlcolor: blue
+bibliography: ref.bib
 ---
 
 ```{r setup, include=FALSE}
@@ -73,7 +75,23 @@ source("probAhelp.R")  # Data
 
 # Problem B: Permutation test
 
+[Bilirubin](http://en.wikipedia.org/wiki/Bilirubin) is a breakdown product of hemoglobin, which is a principal component of red blood cells. If the liver has suffered degeneration,  the decomposition of hemoglobin is elevated, or the gall bladder has been destroyed, large amounts of bilirubin can accumulate in the blood, leading to jaundice, which is a yellowish or greenish pigmentation in the skin.
+
+We will look at a data set taken from [@jorgensen1993theory]. It contains measurements of the concentration of bilirubin (mg/dL) in blood samples taken from an three young men.
+
 ## Subproblem 1.
+```{r echo = FALSE}
+bilirubin <- read.table("bilirubin.txt", header = TRUE)
+bilirubin %>%
+  group_by(pers) %>% 
+  mutate(row = row_number()) %>% 
+  pivot_wider(names_from = pers, values_from = meas) %>% 
+  select(-row) %>% 
+  t() %>%
+  kable(booktabs = TRUE) %>% 
+  kableExtra::kable_styling() %>% 
+  kableExtra::add_header_above(c("Individual", "Concentration (mg/dL)" = 11))
+```
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
@@ -106,3 +124,5 @@ source("probAhelp.R")  # Data
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 [//]: # ----------------------------------------------------------------------------------------------------------------
+
+# References
