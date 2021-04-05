@@ -1,0 +1,108 @@
+---
+title: "Exercise 3"
+author: "Mads Adrian Simonsen, William Scott Grundeland Olsen"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  pdf_document: default
+  github_document: default
+  html_document:
+    df_print: paged
+subtitle: TMA4300 Computer Intensive Statistical Models
+---
+
+```{r setup, include=FALSE}
+library(rmarkdown)  # Dynamic Documents for R
+library(knitr)  # A General-Purpose Package for Dynamic Report Generation in R
+knitr::opts_chunk$set(
+  echo = TRUE, tidy = FALSE, message = FALSE, warning = FALSE, strip.white = TRUE,
+  prompt = FALSE, cache = TRUE, size = "scriptsize", fig.width = 6, fig.height = 4
+)
+knitr::opts_knit$set(root.dir = "./Additional files")  # Changed working directory
+```
+
+\newcommand{\E}{\operatorname E}
+\newcommand{\Var}{\operatorname{Var}}
+\newcommand{\Cov}{\operatorname{Cov}}
+\newcommand{\Corr}{\operatorname{Corr}}
+\newcommand{\Poisson}{\operatorname{Poisson}}
+\newcommand{\Exp}{\operatorname{Exponential}}
+\newcommand{\Uniform}{\operatorname{Uniform}}
+\newcommand{\Betadist}{\operatorname{Beta}}
+\newcommand{\Gammadist}{\operatorname{Gamma}}
+\newcommand{\InvGamma}{\operatorname{Inv-Gamma}}
+\newcommand{\Normal}{\operatorname{Normal}}
+\newcommand{\SD}{\operatorname{SD}}
+\newcommand{\RSS}{\mathrm{RSS}}
+\newcommand{\MSE}{\mathrm{MSE}}
+\newcommand{\T}{\mathsf T}
+\newcommand{\tr}{\operatorname{tr}}
+\newcommand{\rank}{\operatorname{rank}}
+\newcommand{\Bias}{\operatorname{Bias}}
+\newcommand{\diag}{\operatorname{diag}}
+\newcommand{\argmin}{\operatorname*{arg\,min}}
+\newcommand{\argmax}{\operatorname*{arg\,max}}
+\newcommand{\bfy}{\mathbf{y}}
+\newcommand{\bff}{\mathbf{f}}
+\newcommand{\bfzero}{\mathbf{0}}
+\newcommand{\bfeta}{\boldsymbol{\eta}}
+\newcommand{\dtheta}{\, \mathrm{d} \theta}
+\newcommand{\RR}{\mathbb{R}}
+\newcommand{\e}{\mathrm{e}}
+
+
+```{r libraries and help files, eval = TRUE, echo = FALSE}
+library(tidyverse)  # Collection of R packages designed for data science
+
+# Extract pre-programmed R-code
+source("probAdata.R")  # Code
+source("probAhelp.R")  # Data
+```
+
+# Problem A: Comparing AR(2) parameter estimators using resampling of residuals
+
+## Subproblem 1.
+
+
+[//]: # ----------------------------------------------------------------------------------------------------------------
+
+## Subproblem 2.
+
+
+[//]: # ----------------------------------------------------------------------------------------------------------------
+[//]: # ----------------------------------------------------------------------------------------------------------------
+
+# Problem B: Permutation test
+
+## Subproblem 1.
+
+
+[//]: # ----------------------------------------------------------------------------------------------------------------
+
+## Subproblem 2.
+
+[//]: # ----------------------------------------------------------------------------------------------------------------
+
+## Subproblem 3.
+
+[//]: # ----------------------------------------------------------------------------------------------------------------
+[//]: # ----------------------------------------------------------------------------------------------------------------
+
+# Problem C: The EM-algorithm and bootstrapping
+
+## Subproblem 1.
+
+
+[//]: # ----------------------------------------------------------------------------------------------------------------
+
+## Subproblem 2.
+
+[//]: # ----------------------------------------------------------------------------------------------------------------
+
+## Subproblem 3.
+
+[//]: # ----------------------------------------------------------------------------------------------------------------
+
+## Subproblem 4.
+
+[//]: # ----------------------------------------------------------------------------------------------------------------
+[//]: # ----------------------------------------------------------------------------------------------------------------
