@@ -8,24 +8,28 @@ output:
   html_document:
     df_print: paged
 subtitle: TMA4300 Computer Intensive Statistical Models
+bibliography: ref.bib
 ---
 
 ```{r setup, include=FALSE}
 library(rmarkdown)  # Dynamic Documents for R
 library(knitr)  # A General-Purpose Package for Dynamic Report Generation in R
-knitr::opts_chunk$set(echo = TRUE, tidy = FALSE, message = FALSE, warning = FALSE,
-                      strip.white = TRUE, prompt = FALSE, cache = TRUE,
-                      size = "scriptsize", fig.width = 6, fig.height = 4)
+knitr::opts_chunk$set(
+  echo = TRUE, tidy = FALSE, message = FALSE, warning = FALSE, strip.white = TRUE,
+  prompt = FALSE, cache = TRUE, size = "scriptsize", fig.width = 6, fig.height = 4
+)
 ```
 
 \newcommand{\E}{\operatorname E}
 \newcommand{\Var}{\operatorname{Var}}
 \newcommand{\Cov}{\operatorname{Cov}}
 \newcommand{\Corr}{\operatorname{Corr}}
+\newcommand{\Poisson}{\operatorname{Poisson}}
 \newcommand{\Exp}{\operatorname{Exponential}}
 \newcommand{\Uniform}{\operatorname{Uniform}}
 \newcommand{\Betadist}{\operatorname{Beta}}
 \newcommand{\Gammadist}{\operatorname{Gamma}}
+\newcommand{\InvGamma}{\operatorname{Inv-Gamma}}
 \newcommand{\Normal}{\operatorname{Normal}}
 \newcommand{\SD}{\operatorname{SD}}
 \newcommand{\RSS}{\mathrm{RSS}}
@@ -49,6 +53,8 @@ knitr::opts_chunk$set(echo = TRUE, tidy = FALSE, message = FALSE, warning = FALS
 ```{r libraries, eval = TRUE, echo = FALSE}
 library(tidyverse)  # Collection of R packages designed for data science
 
+library(GGally)     # Extension to 'ggplot2'
+
 library(INLA)       # Full Bayesian Analysis of Latent Gaussian Models using Integrated
                     # Nested Laplace Approximations
 library(mvtnorm)    # For multivariate normal distribution
@@ -57,46 +63,621 @@ library(matrixStats)  # For column-wise variance of a matrix
 
 # Problem A: The coal-mining disaster data
 
+In this problem, we analyze a data set from [@jarrett1979note] on the dates of 191 explosions in coal mines in UK involving 10 or more fatalities, covering the period 15 March, 1851 to 22 March, 1962 inclusive.
+
 ## Subproblem 1.
+Figure \ref{fig:coal} shows the 191 explosions over the period. It appears to be a steep linear trend from the beginning to about year 1890  where there is a sudden decrease in the rate. This suggests that there has been a major improvement in the safety regulations. By digging a little deeper, we find that according to [@mills2010regulating], in the late 1890s, all underground extractive industries in the UK, were subjected to varying degrees of regulation and control, and the inspectorate had greatly expanded in numbers, experience and authority.
+
+```{r coal, fig.width=4, fig.height=3, fig.cap="\\label{fig:coal}Cumulative plot of coal mines explosions from the period 15 March, 1851 to 22 March, 1962."}
+data(coal, package = "boot")
+ggplot(cbind(coal, explosions = 1:nrow(coal)), aes(date, explosions)) +
+  geom_step(aes(color = "Cumulative explosions")) +
+  theme_minimal() +
+  theme(legend.position = "top", legend.title = element_blank())
+```
+
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 2.
+We assume the coal-mining disasters follow an inhomogeneous Poisson process with intensity function $\lambda(t)$ (number of events per year).
+We assume $\lambda(t)$ to be piecewise constant with $n$ breakpoints at times
+$t_k:k=1,\ldots,n$.
+We let $t_0$ and $t_{n+1}$ be the start and end times corresponding to 15 March, 1851 and 22 March, 1962, respectively, and let $t_0<t_1<t_2<\ldots<t_n<t_{n+1}$.
+Then the intensity function becomes
+\begin{equation}\label{eq:intensity}
+  \lambda(t) = \begin{cases}
+    \lambda_{k-1}, & \text{if}\,t\in[t_{k-1},t_k),\quad k=1,\ldots,n, \\
+    \lambda_n, & \text{if}\,t\in[t_n,t_{n+1}].
+  \end{cases}
+\end{equation}
+
+Furthermore, let $x_k$ be the $y_k$-vector of the exact times when the disasters occurred in the time interval $[t_k, t_{k+1})$.
+We then let $x$ be the $y$-vector of the exact times when the disasters occurred in the whole time interval $[t_0, t_{n+1}]$, where $y = \sum_{k=0}^n y_k$.
+We assume that the coal-mining disasters follow a hierarchical Bayesian structure, with
+\begin{equation}\label{eq:bayes-poisson}
+  \begin{split}
+    [y_k\mid\lambda_k, t_k, t_{k+1}]&\sim\Poisson(\lambda_k(t_{k+1} - t_k)),\quad k=0,1,\ldots, n,\\
+    [x_k\mid y_k,t_{k},t_{k+1}]&\sim \frac{y_k!}{(t_{k+1} - t_k)^{y_k}},
+    \quad\quad\quad\quad\quad k=0,1,\ldots, n,\\
+    \Rightarrow\quad [x_k,y_k\mid\lambda_k,t_{k},t_{k+1}]&\sim \lambda_k^{y_k}\exp(-\lambda_k(t_{k+1} - t_k)),
+    \; k=0,1,\ldots, n, \\
+    t_k &\sim \Uniform(t_{k-1}, t_{k+1}),\quad\, \quad k=1,2,\ldots, n, \\
+    [\lambda_k\mid\beta]&\sim \Gammadist(2, 1/\beta),\quad\quad\quad\quad k=0,1,\ldots,n, \\
+    \beta &\sim f_\beta(\beta)\propto \frac{\exp\left(-\frac{1}{\beta}\right)}{\beta},\quad\beta>0,
+  \end{split}
+\end{equation}
+where $\lambda_0,\ldots,\lambda_n$ are conditionally independent of each other with respect to $\beta$ and independent of $t_1,\ldots,t_n$, where the first and second argument in $\Gammadist(\cdot, \cdot)$ corresponds to the shape and rate parameter, respectively, and where $f_\beta(\beta)$ is an improper prior.
+
+We will in this problem assume $n=1$, such that the model parameters are $\theta = (t_1, \lambda_0, \lambda_1, \beta)$.
+The posterior distribution for $\theta$ given the observed data $x$ is then given by
+$$
+\begin{split}
+  f_{\theta\mid x}(\theta\mid x)
+  &\propto f_{\theta, x,y}(\theta, x,y) \\
+  &= f_{x,y\mid t_1,\lambda_0,\lambda_1}(x,y\mid t_1,\lambda_0,\lambda_1)\cdot f_{t_1}(t_1)\cdot f_{\lambda_0\mid \beta}(\lambda_0\mid\beta) \cdot f_{\lambda_1\mid \beta}(\lambda_1\mid\beta) \cdot f_\beta(\beta) \\
+  &\propto \lambda_0^{y_0}\exp\{-\lambda_0(t_1 - t_0)\}\lambda_1^{y_1}\exp\{-\lambda_1(t_2 - t_1)\}\cdot\frac{1}{t_2 - t_0}\cdot \frac{\lambda_0}{\beta^2}\e^{-\frac{\lambda_0}{\beta}}\cdot\frac{\lambda_1}{\beta^2}\e^{-\frac{\lambda_1}{\beta}}\cdot \frac{\exp\left(-\frac{1}{\beta}\right)}{\beta} \\
+  &\propto \frac{\lambda_0^{y_0 + 1}\lambda_1^{y_1 + 1}}{\beta^5} \exp\left\{-\left(\lambda_0(t_1 - t_0) + \lambda_1(t_2 - t_1) + \frac{1}{\beta}(\lambda_0 + \lambda_1 + 1)\right)\right\},\\
+  &\text{with}\quad \beta > 0,\; \lambda_0\geq0,\;\lambda_1\geq0\quad\text{and}\quad t_0\leq t_1 \leq t_2.
+\end{split}
+$$
+That is, the posterior distribution is equal to
+\begin{equation}\label{eq:A-posterior}
+  f_{\theta\mid x}(\theta\mid x) = \frac{1}{c}\cdot \frac{\lambda_0^{y_0 + 1}\lambda_1^{y_1 + 1}}{\beta^5} \exp\left\{-\left(\lambda_0(t_1 - t_0) + \lambda_1(t_2 - t_1) + \frac{1}{\beta}(\lambda_0 + \lambda_1 + 1)\right)\right\},
+\end{equation}
+where $c$ is the normalizing constant.
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 3.
+We calculate the full conditional for each of the elements in $\theta$.
+$$
+\begin{split}
+  [t_1\mid\lambda_0,\lambda_1,\beta,x]
+    &\sim f_{t_1\mid\lambda_0,\lambda_1,\beta,x}(t_1\mid\lambda_0,\lambda_1,\beta,x) \\
+    &\propto f_{\theta\mid x}(\theta\mid x) \\
+    &\propto I_{(t_0, t_2)}(t_1)\cdot\lambda_0^{y_0 + 1}\lambda_1^{y_1 + 1}\exp\left\{-(\lambda_0 - \lambda_1)t_1\right\} \\
+    &\sim\text{Unknown distribution}; \\
+  [\lambda_0\mid t_1,\lambda_1,\beta,x]
+    &\sim f_{\lambda_0\mid t_1,\lambda_1,\beta,x}(\lambda_0\mid t_1,\lambda_1,\beta,x) \\
+    &\propto f_{\theta\mid x}(\theta\mid x) \\
+    &\propto I_{[0,\infty)}(\lambda_0)\cdot\lambda_0^{(y_0 + 2) - 1}\exp\left\{-\left(t_1 - t_0 + \frac{1}{\beta}\right)\lambda_0\right\} \\
+    &\sim\Gammadist\left(y_0 + 2, t_1 - t_0 + \frac{1}{\beta}\right); \\
+  [\lambda_1\mid t_1,\lambda_0,\beta,x]
+    &\sim f_{\lambda_1\mid t_1,\lambda_0,\beta,x}(\lambda_1\mid t_1,\lambda_0,\beta,x) \\
+    &\propto f_{\theta\mid x}(\theta\mid x) \\
+    &\propto I_{[0,\infty)}(\lambda_1)\cdot \lambda_1^{(y_1 + 2) - 1}\exp\left\{-\left(t_2 - t_1 + \frac{1}{\beta}\right)\lambda_1\right\} \\
+    &\sim \Gammadist\left(y_1 + 2, t_2 - t_1 + \frac{1}{\beta}\right); \\
+  [\beta\mid t_1\lambda_0,\lambda_1,x]
+    &\sim f_{\beta\mid t_1\lambda_0,\lambda_1,x}(\beta\mid t_1\lambda_0,\lambda_1,x) \\
+    &\propto f_{\theta\mid x}(\theta\mid x) \\
+    &\propto I_{(0,\infty)}(\beta)\cdot\beta^{-4-1}\exp\left\{-\frac{\lambda_0 + \lambda_1 + 1}{\beta}\right\} \\
+    &\sim \InvGamma(4, \lambda_0 + \lambda_1 + 1).
+\end{split}
+$$
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 4.
+We implement a single site McMC algorithm for $f(\theta\mid x)$, where we need to do a Gibbs step for all the full conditionals except for $[t_1\mid\lambda_0,\lambda_1,\beta,x]$, where we will do a Metropolis Hastings step. We choose a random walk proposal
+\begin{equation}\label{eq:Asingle-prop}
+[t_1^*\mid t_1^{(k)}]\sim\Normal(t_1^{(k)}, d),
+\end{equation}
+where $t_1^{(k)}$ is the current state of the Markov chain, and $d$ is a tuning parameter. We denote the proposal pdf by $Q(t_1^*\mid t_1^{(k)})$ and the target pdf by $\pi(t_1^{(k)}) = f_{t_1\mid \lambda_0,\lambda_1,\beta,x}(t_1^{(k)}\mid \lambda_0,\lambda_1,\beta,x)$. The acceptance probability is then given by
+\begin{equation}\label{eq:Asingle-accept}
+  \alpha(t_1^*\mid t_1^{(k)}) = \min\left\{1, \frac{\pi(t_1^*)\cdot Q(t_1^{(k)}\mid t_1^*)}{\pi(t_1^{(k)})\cdot Q(t_1^*\mid t_1^{(k)})}\right\}.
+\end{equation}
+Since the proposal distribution is a symmetric, we have that $Q(t_1^*\mid t_1^{(k)}) = Q(t_1^{(k)}\mid t_1^*)$. What is left to do, is to compute the ratio of the target distribution. First we notice that the change point $t_1$ directly affects the event counts $y_0$ and $y_1$. That is,
+$$
+  y_0(t) = \sum_{x}I(x < t)\quad\text{and}\quad y_1(t) = y - t_0(t).
+$$
+Let $y_i^{*} = y_i(t_1^*)$ and $y_i^{(k)} = y_i(t_1^{(k)})$. We compute the ratio
+
+$$
+\begin{split}
+  \frac{\pi(t_1^*)}{\pi(t_1^{(k)})}
+  &= \exp\left\{\log\frac{\lambda_0^{y_0^* + 1}\lambda_1^{y_1^* + 1}\e^{-(\lambda_0 - \lambda_1)t_1^*}}{\lambda_0^{y_0^{(k)} + 1}\lambda_1^{y_1^{(k)} + 1}\e^{-(\lambda_0 - \lambda_1)t_1^{k}}}\right\} \\
+  &= \exp\left\{(y_0^* - y_0^{(k)})\log \lambda_0 + (y_1^* - y_1^{(k)})\log \lambda_1 -(\lambda_0 - \lambda_1)(t_1^* - t_1^{(k)})\right\},
+\end{split}
+$$
+which we insert into \eqref{eq:Asingle-accept} to get the acceptance probability.
+
+```{r single-site McMC algorithm}
+# Performs a Metropolis Hastings step to sample t_1
+MH_t1 <- function(t_1, lambda_0, lambda_1, t_0, t_2, x, y_0, y_1, y, d) {
+  accept <- 0
+  t_star <- rnorm(1, mean = t_1, sd = d)  # Proposal
+  if (t_0 < t_star & t_star < t_2) {
+    y_0_star <- sum(x < t_star)  # Number of disasters before t_star
+    y_1_star <- y - y_0_star     # Number of disasters after t_star
+    alpha <- min(
+      1,
+      exp((y_0_star - y_0)*log(lambda_0) + (y_1_star - y_1)*log(lambda_1)
+          - (lambda_0 - lambda_1)*(t_star - t_1))
+    )
+    if (runif(1) < alpha) {
+      # Accept
+      t_1 <- t_star
+      y_0 <- y_0_star
+      y_1 <- y_1_star
+      accept <- 1
+    }
+  }
+  list(t_1 = t_1, y_0 = y_0, y_1 = y_1, accept = accept)
+}
+
+# Samples from the posterior distribution using single site McMC
+# data:     number of observations
+# t_1:      initial changepoint
+# lambda_0: initial rateparameter
+# lambda_1: initial rateparameter
+# beta:     initial hyperparameter
+# d:        tuning parameter for the proposal distribution
+# n_iter:   number of iterations
+single_site_McMC <- function(data, t_1, lambda_0, lambda_1, beta, d = 1, n_iter = 5000) {
+  x <- data$date
+  y <- length(x)  # Number of disasters
+  t_0 <- x[1]     # Start date
+  t_2 <- x[y]     # End date
+  theta <- matrix(nrow = n_iter, ncol = 4,
+             dimnames = list(NULL, c("t_1", "lambda_0", "lambda_1", "beta"))
+           )
+  theta[1, ] <- c(t_1, lambda_0, lambda_1, beta)
+  y_0 <- sum(x < t_1)  # Number of disasters before t_1
+  y_1 <- y - y_0       # Number of disasters after t_1
+  accept_count <- 0
+  if (n_iter > 1) {
+    for (i in 2:n_iter) {
+      # Metropolis Hastings step
+      param <- MH_t1(t_1, lambda_0, lambda_1, t_0, t_2, x, y_0, y_1, y, d)
+      t_1 <- param$t_1
+      y_0 <- param$y_0
+      y_1 <- param$y_1
+      accept_count <- accept_count + param$accept
+      
+      # Gibbs step, sample lambda_0
+      lambda_0 <- rgamma(1,
+                    shape = y_0 + 2,
+                    rate  = t_1 - t_0 + 1/beta
+                  )
+      
+      # Gibbs step, sample lambda_1
+      lambda_1 <- rgamma(1,
+                    shape = y_1 + 2,
+                    rate  = t_2 - t_1 + 1/beta
+                  )
+      
+      # Gibbs step, sample beta
+      beta <- 1 / rgamma(1,
+                    shape = 4,
+                    rate  = lambda_0 + lambda_1 + 1
+                  )
+      # Update
+      theta[i, ] <- c(t_1, lambda_0, lambda_1, beta)
+    }
+  }
+  print(sprintf("Acceptance rate for t_1: %.2f%%", 100*accept_count/(n_iter - 1)))
+  as.data.frame(theta)
+}
+```
+
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 5.
+```{r run single-site, fig.cap="\\label{fig:single_site}Trace plot of two chains from different starting values using a single site McMC."}
+set.seed(731)
+# Trace plot function
+# ...: Takes the chains as input
+plot_trace <- function(...) {
+  input_list <- list(...)
+  n <- nrow(input_list[[1]])
+  nchains <- length(input_list)
+  bind_rows(..., .id = "chain") %>% 
+    mutate(n = rep(1:n, nchains)) %>% 
+    pivot_longer(c("t_1", "lambda_0", "lambda_1", "beta"), names_to = "parameter") %>% 
+    ggplot(aes(n, value, color = chain)) +
+    geom_line() +
+    facet_wrap(~ parameter, nrow = 4, scales = "free_y") +
+    theme_minimal()
+}
+
+# Sample two chains from different starting values
+n <- 5000
+theta1 <- single_site_McMC(coal, coal$date[1], 0.1, 10, 20, d = 10, n_iter = n)
+theta2 <- single_site_McMC(coal, coal$date[nrow(coal)], 30, 0.1, 2, d = 10, n_iter = n)
+plot_trace(theta1, theta2)
+```
+
+A trace plot of two chains from different starting values is shown in Figure \ref{fig:single_site}. The chain appears to converge instantly, with an acceptance rate just below $20\%$, which is a good rate as we want an acceptance rate somewhere between $20\%$ and $50\%$.
+We let the burn-in period be the 300 first steps to be sure.
+
+```{r single-site burnin,  fig.cap="\\label{fig:single_site_burnin}Trace plot of two chains from different starting values using a single site McMC after discarding the burn-in."}
+burnin <- 300
+theta1 <- tail(theta1, -burnin)
+theta2 <- tail(theta2, -burnin)
+
+# Plot trace
+plot_trace(theta1, theta2)
+```
+Figure \ref{fig:single_site_burnin} shows the same trace plot but now after discarding the burn-in period.
+The chain shows no trend.
+We only see a homogeneous band from each of the parameters.
+Looking specifically at the trace of $t_1$, it seems to be centered around 1890, which we anticipated by seeing a clear rate of change at the given point in Figure \ref{fig:coal}.
+We also see that $t_1$ mixes quite well in the limiting distribution, but not as good as the other parameters.
+
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 6.
+The proposal distribution given by \eqref{eq:Asingle-prop} has a tuning parameter $d$.
+In Figure \ref{fig:single_site} and \ref{fig:single_site_burnin}, the tuning parameter was set to $d=10$.
+We now try to set it at $d=1$ and $200$.
+The result is shown in Figure \ref{fig:single-site-tune}.
+For the parameters $\beta$ and $\lambda_1$, it is hard to see any difference.
+Looking at the other parameters, $t_1$ and $\lambda_0$, we see that the chain with tuning parameter $d=200$ mixes almost instantly, but the chain with tuning parameter does not mix until $17500$ steps.
+We also see that the acceptance rate is only $1\%$ for the chain with parameter $d=200$, while the chain with parameter $d=1$ has an acceptance rate of $50\%$.
+After discarding the burn-in period, we can get a clearer picture of the behavior of the two chains in Figure \ref{fig:single-site-tune-burnin}.
+The chain with $d=1$ takes very small frequent steps, and stays fixed around $t_1=1950$ for a long time before it moves to the neighborhood of $t_1=1890$.
+Looking at Figure \ref{fig:coal}, one can see a small change of rate, so it makes sense that the distribution of $t_1$ has a small mode at this position.
+The chain with $d=200$ takes very big steps, and therefore gets rejected almost all the time.
+
+```{r single-site tuning, fig.cap="\\label{fig:single-site-tune}Trace plots of two chains with tuning parameters $d=1$ and $d=200$ using single-site McMC."}
+set.seed(30)
+n_iter = 20000
+d <- c(1, 200)
+
+# Sample two chains with different values for tuning parameter
+theta3 <- single_site_McMC(coal, coal$date[nrow(coal)], 10, 10, 10,  d[1], n_iter)
+theta4 <- single_site_McMC(coal, coal$date[nrow(coal)], 10, 10, 10,  d[2], n_iter)
+
+# Plot trace
+plot_trace(theta3, theta4) +
+  scale_color_hue(name = "d", labels = d)
+```
+
+Figure \ref{fig:single-site-tune-burnin} shows the same trace plot, but after discarding the burn-in period.
+We see that both of them has reached the limiting distribution, but they both yield a poor mixing, especially the chain with high tuning parameter.
+
+```{r single-site tuning burn-in, fig.cap="\\label{fig:single-site-tune-burnin}Trace plots of two chains with tuning parameters $d=1$ and $d=200$ using single-site McMC after discarding the burn-in."}
+burnin <- 17500
+theta3 <- tail(theta3, -burnin)
+theta4 <- tail(theta4, -burnin)
+
+# Plot trace
+plot_trace(theta3, theta4) +
+  scale_color_hue(name = "d", labels = d)
+```
+
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 7.
 
+We will define and implement a block Metropolis-Hastings algorithm for $f_{\theta\mid x}(\theta\mid x)$ using two block proposals.
+
 ### Subsubproblem (a)
 
+We will use a block proposal $(t_1, \lambda_0, \lambda_1)$ keeping $\beta$ unchanged.
+We generate a proposal $(t_1^*, \lambda_0^*, \lambda_1^*)$ by proposing $t_1$ as before according to \eqref{eq:Asingle-prop}.
+We then sample from the joint full conditional of $(\lambda_0^*,\lambda_1^*)$ including the new proposed value $t_1^*$. That is,
+$$
+\begin{split}
+  t_1^*&\sim\Normal(t_1^{(k)}, d_t); \\
+  [\lambda_0^*,\lambda_1^*\mid t_1^*,\beta, x]&\sim f_{\lambda_0,\lambda_1\mid t_1,\beta, x}(\lambda_0^*,\lambda_1^*\mid t_1^*,\beta, x) \\
+  &\propto f_{\lambda_0\mid t_1,\beta, x}(\lambda_0^*\mid t_1^*,\beta, x)f_{\lambda_1\mid t_1,\beta, x}(\lambda_1^*\mid t_1^*,\beta, x) \\
+  &= \Gammadist\left(\lambda_0;y_0^* + 2, t_1^* - t_0 + \frac{1}{\beta}\right)\Gammadist\left(\lambda_1;y_1^* + 2, t_2 - t_1^* + \frac{1}{\beta}\right),
+\end{split}
+$$
+where $d_t$ is a tuning parameter.
+The target distribution is given by
+
+$$
+\pi(t_1,\lambda_0,\lambda_1) \propto f_{\theta\mid x}(\theta\mid x)\propto\lambda_0^{y_0 + 1}\lambda_1^{y_1 + 1}\exp\left\{-\left(\lambda_0\left(t_1 - t_0 + \frac{1}{\beta}\right) + \lambda_1\left(t_2 - t_1 + \frac{1}{\beta}\right)\right)\right\},
+$$
+so the acceptance probability becomes
+
+$$
+\begin{split}
+  &\quad\alpha(t_1^*,\lambda_0^*,\lambda_1^*\mid t_1^{(k)},\lambda_0^{(k)},\lambda_1^{(k)}) \\
+  &=\min\left\{1, \frac{\pi(t_1^*,\lambda_0^*,\lambda_1^*)\cdot Q(t_1^{(k)},\lambda_0^{(k)},\lambda_1^{(k)}\mid t_1^*,\lambda_0^*,\lambda_1^*)}
+  {\pi(t_1^{(k)},\lambda_0^{(k)},\lambda_1^{(k)})\cdot Q(t_1^*,\lambda_0^*,\lambda_1^*\mid t_1^{(k)},\lambda_0^{(k)},\lambda_1^{(k)})}\right\} \\
+  &=\min\left\{1, \frac{\pi(t_1^*,\lambda_0^*,\lambda_1^*)\cdot\Gammadist\left(\lambda_0^{(k)};y_0^* + 2, t_1^* - t_0 + \frac{1}{\beta}\right)\Gammadist\left(\lambda_1^{(k)};y_1^* + 2, t_2 - t_1^* + \frac{1}{\beta}\right)}
+  {\pi(t_1^{(k)},\lambda_0^{(k)},\lambda_1^{(k)})\cdot\Gammadist\left(\lambda_0^*;y_0^{(k)} + 2, t_1^{(k)} - t_0 + \frac{1}{\beta}\right)\Gammadist\left(\lambda_1^*;y_1^{(k)} + 2, t_2 - t_1^{(k)} + \frac{1}{\beta}\right)}\right\},
+\end{split}
+$$
+where we have omitted the Normal proposal for $t_1^*$ because of the symmetry properties.
+
+
 ### Subsubproblem (b)
+The other block proposal is $(\beta, \lambda_0, \lambda_1)$ keeping $t_1$ unchanged.
+We generate a proposal $(\beta^*, \lambda_0^*, \lambda_1^*)$ by proposing $\beta^*$ from a Normal distribution centered at the current state $\beta$, like we did previously with $t_1$.
+We then sample from the joint full conditional of $(\lambda_0^*,\lambda_1^*)$ including the new proposed value $\beta^*$.
+That is,
+$$
+\begin{split}
+  \beta^*&\sim\Normal(\beta^{(k)}, d_\beta); \\
+  [\lambda_0^*,\lambda_1^*\mid t_1,\beta^*, x]&\sim f_{\lambda_0,\lambda_1\mid t_1,\beta, x}(\lambda_0^*,\lambda_1^*\mid t_1,\beta^*, x) \\
+  &\propto f_{\lambda_0\mid t_1,\beta, x}(\lambda_0^*\mid t_1,\beta^*, x)f_{\lambda_1\mid t_1,\beta, x}(\lambda_1^*\mid t_1,\beta^*, x) \\
+  &= \Gammadist\left(\lambda_0;y_0 + 2, t_1 - t_0 + \frac{1}{\beta^*}\right)\Gammadist\left(\lambda_1;y_1 + 2, t_2 - t_1 + \frac{1}{\beta^*}\right),
+\end{split}
+$$
+where $d_\beta$ is a tuning parameter.
+The target distribution is given by
+
+$$
+\pi(\beta,\lambda_0,\lambda_1) \propto f_{\theta\mid x}(\theta\mid x)\propto\frac{\lambda_0^{y_0 + 1}\lambda_1^{y_1 + 1}}{\beta^5}\exp\left\{-\left(\lambda_0(t_1 - t_0) + \lambda_1(t_2 - t_1) + \frac{1}{\beta}(\lambda_0 + \lambda_1 + 1)\right)\right\},
+$$
+so the acceptance probability becomes
+
+$$
+\begin{split}
+  &\quad\alpha(\beta^*,\lambda_0^*,\lambda_1^*\mid \beta^{(k)},\lambda_0^{(k)},\lambda_1^{(k)}) \\
+  &=\min\left\{1, \frac{\pi(\beta^*,\lambda_0^*,\lambda_1^*)\cdot Q(\beta^{(k)},\lambda_0^{(k)},\lambda_1^{(k)}\mid \beta^*,\lambda_0^*,\lambda_1^*)}
+  {\pi(\beta^{(k)},\lambda_0^{(k)},\lambda_1^{(k)})\cdot Q(\beta^*,\lambda_0^*,\lambda_1^*\mid \beta^{(k)},\lambda_0^{(k)},\lambda_1^{(k)})}\right\} \\
+  &=\min\left\{1, \frac{\pi(\beta^*,\lambda_0^*,\lambda_1^*)\cdot\Gammadist\left(\lambda_0^{(k)};y_0 + 2, t_1 - t_0 + \frac{1}{\beta^*}\right)\Gammadist\left(\lambda_1^{(k)};y_1 + 2, t_2 - t_1 + \frac{1}{\beta^*}\right)}
+  {\pi(\beta^{(k)},\lambda_0^{(k)},\lambda_1^{(k)})\cdot\Gammadist\left(\lambda_0^*;y_0 + 2, t_1 - t_0 + \frac{1}{\beta^{(k)}}\right)\Gammadist\left(\lambda_1^*;y_1 + 2, t_2 - t_1 + \frac{1}{\beta^{(k)}}\right)}\right\},
+\end{split}
+$$
+where we have omitted the Normal proposal for $\beta^*$ because of the symmetry properties.
+
+```{r block algorithm}
+# Computes the log target core of (t_1, lambda_0, lambda_1)
+ltarget_1 <- function(t_1, lambda_0, lambda_1, beta, y_0, y_1, t_0, t_2) {
+  (y_0 + 1)*log(lambda_0) + (y_1 + 1)*log(lambda_1) -
+    (lambda_0*(t_1 - t_0 + 1/beta) + lambda_1*(t_2 - t_1 + 1/beta))
+}
+
+# Computes the log target core of (beta, lambda_0, lambda_1)
+ltarget_2 <- function(t_1, lambda_0, lambda_1, beta, y_0, y_1, t_0, t_2) {
+  (y_0 + 1)*log(lambda_0) + (y_1 + 1)*log(lambda_1) - 5*log(beta) -
+    (lambda_0*(t_1 - t_0) + lambda_1*(t_2 - t_1) + 1/beta * (lambda_0 + lambda_1 + 1))
+}
+
+# Performs a Metropolis Hastings step to sample (t_1, lambda_0, lambda_1)
+MH_t1_lamb0_lamb1 <- function(t_1, lambda_0, lambda_1, beta, y_0, y_1, y, x, t_0, t_2, d)
+{
+  accept <- 0
+  t_star <- rnorm(1, mean = t_1, sd = d)  # Proposal
+  if (t_0 < t_star & t_star < t_2) {
+    y_0_star <- sum(x < t_star)  # Number of disasters before t_star
+    y_1_star <- y - y_0_star     # Number of disasters after t_star
+    # Proposal
+    lambda_0_star <- rgamma(1,
+                            shape = y_0_star + 2,
+                            rate  = t_star - t_0 + 1/beta
+    )
+    # Proposal
+    lambda_1_star <- rgamma(1,
+                            shape = y_1_star + 2,
+                            rate  = t_2 - t_star + 1/beta
+    )
+    # Log target ratio
+    ltarget_ratio <- ltarget_1(
+      t_star, lambda_0_star, lambda_1_star, beta, y_0_star, y_1_star,
+      t_0, t_2
+    ) - ltarget_1(t_1, lambda_0, lambda_1, beta, y_0, y_1, t_0, t_2)
+    # Log proposal ratio
+    lprop_ratio <- dgamma(lambda_0,
+                          shape = y_0_star + 2,
+                          rate  = t_star - t_0 + 1/beta,
+                          log   = TRUE
+    ) + dgamma(lambda_1,
+               shape = y_1_star + 2,
+               rate  = t_2 - t_star + 1/beta,
+               log   = TRUE
+    ) - dgamma(lambda_0,
+               shape = y_0 + 2,
+               rate  = t_1 - t_0 + 1/beta,
+               log   = TRUE
+    ) - dgamma(lambda_1,
+               shape = y_1 + 2,
+               rate  = t_2 - t_1 + 1/beta,
+               log   = TRUE
+    )
+    alpha <- min(1, exp(ltarget_ratio + lprop_ratio))
+    if (runif(1) < alpha) {
+      # Accept proposals
+      t_1 <- t_star
+      y_0 <- y_0_star
+      y_1 <- y_1_star
+      lambda_0 <- lambda_0_star
+      lambda_1 <- lambda_1_star
+      accept <- 1
+    }
+  }
+  list(t_1 = t_1, y_0 = y_0, y_1 = y_1, lambda_0 = lambda_0, lambda_1 = lambda_1,
+       accept = accept)
+}
+
+# Performs a Metropolis Hastings step to sample (beta, lambda_0, lambda_1)
+MH_beta_lamb0_lamb1 <- function(t_1, lambda_0, lambda_1, beta, y_0, y_1, t_0, t_2, d) {
+  accept <- 0
+  beta_star <- rnorm(1, mean = beta, sd = d)
+  if (beta_star > 0) {
+    # Proposal
+    lambda_0_star <- rgamma(1,
+                            shape = y_0 + 2,
+                            rate  = t_1 - t_0 + 1/beta_star
+    )
+    # Proposal
+    lambda_1_star <- rgamma(1,
+                            shape = y_1 + 2,
+                            rate  = t_2 - t_1 + 1/beta_star
+    )
+    # Log target ratio
+    ltarget_ratio <- ltarget_2(
+      t_1, lambda_0_star, lambda_1_star, beta_star, y_0, y_1, t_0, t_2
+    ) - ltarget_2(t_1, lambda_0, lambda_1, beta, y_0, y_1, t_0, t_2)
+    # Log proposal ratio
+    lprop_ratio <- dgamma(lambda_0,
+                          shape = y_0 + 2,
+                          rate  = t_1 - t_0 + 1/beta_star,
+                          log   = TRUE
+    ) + dgamma(lambda_1,
+               shape = y_1 + 2,
+               rate  = t_2 - t_1 + 1/beta_star,
+               log   = TRUE
+    ) - dgamma(lambda_0,
+               shape = y_0 + 2,
+               rate  = t_1 - t_0 + 1/beta,
+               log   = TRUE
+    ) - dgamma(lambda_1,
+               shape = y_1 + 2,
+               rate  = t_2 - t_1 + 1/beta,
+               log   = TRUE
+    )
+    alpha <- min(1, exp(ltarget_ratio + lprop_ratio))
+    if (runif(1) < alpha) {
+      # Accept proposals
+      beta <- beta_star
+      lambda_0 <- lambda_0_star
+      lambda_1 <- lambda_1_star
+      accept <- 1
+    }
+  }
+  list(beta = beta, lambda_0 = lambda_0, lambda_1 = lambda_1, accept = accept)
+}
+
+# Samples from the posterior distribution using block McMC
+# data:     number of observations
+# t_1:      initial changepoint
+# lambda_0: initial rateparameter
+# lambda_1: initial rateparameter
+# beta:     initial hyperparameter
+# d:        tuning parameter for the proposal distribution
+# n_iter:   number of iterations
+block_McMC <- function(data, t_1, lambda_0, lambda_1, beta, d1 = 1, d2 = 1, n_iter = 5000)
+  {
+  x <- data$date
+  y <- length(x)  # Number of disasters
+  t_0 <- x[1]     # Start date
+  t_2 <- x[y]     # End date
+  theta <- matrix(nrow = n_iter, ncol = 4,
+                  dimnames = list(NULL, c("t_1", "lambda_0", "lambda_1", "beta"))
+  )
+  theta[1, ] <- c(t_1, lambda_0, lambda_1, beta)
+  y_0 <- sum(x < t_1)  # Number of disasters before t_1
+  y_1 <- y - y_0       # Number of disasters after t_1
+  accept_count_1 <- 0
+  accept_count_2 <- 0
+  if (n_iter > 1) {
+    for (i in 2:n_iter) {
+      if (i %% 2 == 0) {
+        # Block proposal for (t_1, lambda_0, lambda_1) keeping beta unchanged
+        param <- MH_t1_lamb0_lamb1(
+                   t_1, lambda_0, lambda_1, beta, y_0, y_1, y, x, t_0, t_2, d1
+                 )
+        t_1 <- param$t_1
+        y_0 <- param$y_0
+        y_1 <- param$y_1
+        lambda_0 <- param$lambda_0
+        lambda_1 <- param$lambda_1
+        accept_count_1 <- accept_count_1 + param$accept
+      } else {
+        # Block proposal for (beta, lambda_0, lambda_1) keeping t_0 unchanged
+        param2 <- MH_beta_lamb0_lamb1(
+                    t_1, lambda_0, lambda_1, beta, y_0, y_1, t_0, t_2, d2
+                  )
+        beta <- param2$beta
+        lambda_0 <- param2$lambda_0
+        lambda_1 <- param2$lambda_1
+        accept_count_2 <- accept_count_2 + param2$accept
+      }
+      theta[i, ] <- c(t_1, lambda_0, lambda_1, beta)  # Update
+    }
+  }
+  print(sprintf("Acceptance rate for (t_1, lambda_0, lambda_1): %.2f%%",
+                2*100*accept_count_1/(n_iter - 1)))
+  print(sprintf("Acceptance rate for (beta, lambda_0, lambda_1): %.2f%%",
+                2*100*accept_count_2/(n_iter - 1)))
+  as.data.frame(theta)
+}
+```
+
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 8.
+
+Figure \ref{fig:A-block1} shows a nine chains with combinations of different tuning parameters for $\beta$ in the first proposal block, and for $t_1$ in the second proposal block.
+We see that three of the chains did not converge.
+We will eliminate these, together with the chains that had an acceptance probability less than $15\%$, which leaves the second chain with $(d_t, t_\beta) = (10, 1)$ with a burn-in period of about $n=500$.
+
+```{r block1 sample, fig.cap="\\label{fig:A-block1}Trace plots of nine chains with blocking proposals with different tuning parameter values"}
+set.seed(93)
+n_iter <- 5000
+d1 <- c(1, 10, 200)
+d2 <- c(1, 2, 10)
+d_grid <- expand.grid(d1, d2)
+lab <- with(d_grid, paste0("(", Var1, ", ", Var2, ")"))
+
+# Sample 3 chains with different values for tuning parameter
+theta5 <- block_McMC(coal, coal$date[nrow(coal)], 10, 10, 10, d1[1], d2[1], n_iter)
+theta6 <- block_McMC(coal, coal$date[nrow(coal)], 10, 10, 10, d1[2], d2[1], n_iter)
+theta7 <- block_McMC(coal, coal$date[nrow(coal)], 10, 10, 10, d1[3], d2[1], n_iter)
+theta8 <- block_McMC(coal, coal$date[nrow(coal)], 10, 10, 10, d1[1], d2[2], n_iter)
+theta9 <- block_McMC(coal, coal$date[nrow(coal)], 10, 10, 10, d1[2], d2[2], n_iter)
+theta10 <- block_McMC(coal, coal$date[nrow(coal)], 10, 10, 10, d1[3], d2[2], n_iter)
+theta11 <- block_McMC(coal, coal$date[nrow(coal)], 10, 10, 10, d1[1], d2[3], n_iter)
+theta12 <- block_McMC(coal, coal$date[nrow(coal)], 10, 10, 10, d1[2], d2[3], n_iter)
+theta13 <- block_McMC(coal, coal$date[nrow(coal)], 10, 10, 10, d1[3], d2[3], n_iter)
+
+# Plot trace
+plot_trace(theta5, theta6, theta7, theta8, theta9, theta10, theta11, theta12, theta13) +
+  scale_color_hue(name = "(d_t, d_beta)", labels = lab)
+```
+
+We now compare the single-site chain with tuning parameter $d=10$ and our candidate from the block proposal chain. We see that the single-site chain explores more of the domain.
+A possibility is that there is a computational error in the acceptance probability for the block proposal.
+However, they both yield a quite good mixing, but not perfect, as $t_1$ looks a bit sparse.
+
+```{r block1 burnin, fig.cap="\\label{fig:A-block1-burnin}The best candidate of the chains with blocking proposals and the single-site proposal chain."}
+burnin <- 500
+theta6 <- tail(theta6, -burnin)
+
+theta1 <- tail(theta1, nrow(theta6))
+
+# Plot trace
+plot_trace(theta1, theta6) + scale_color_hue(labels = c("Single-site", "Block"))
+```
+
+We use the single-site chain to estimate the marginal posterior density of each of the variables.
+Figure \ref{fig:theta-marginal} shows that the expected change point is at $t_1=1890.66$, where the disasters per year is reduced from $\lambda_0=3.14$ to $\lambda_1=0.95$, which is a major improvement for the coal miners, although still not ideal.
+
+```{r theta marginal densities, fig.cap="\\label{fig:theta-marginal}Estimated marginal posterior distributions from single-site McMC, with the empirical mean."}
+theta1 %>% 
+  pivot_longer(everything(), names_to = "parameter") %>% 
+  group_by(parameter) %>% 
+  mutate(Expectation = mean(value)) %>% 
+  ggplot(aes(value)) +
+  geom_density() +
+  geom_vline(aes(xintercept = Expectation, color = factor(round(Expectation, 2)))) +
+  facet_wrap(~ parameter, nrow = 2, scales = "free") +
+  labs(color = "Expectation") +
+  theme_minimal()
+```
+
+The scatter plot of $[\lambda_0,\lambda_1\mid x]$ is shown in Figure \ref{fig:A-cov-lamb} also showing $\Cov[\lambda_0,\lambda_1\mid x]$. We see that there is a very small correlation.
+
+```{r, fig.width=3.5, fig.asp=1, fig.cap="\\label{fig:A-cov-lamb}Scatter plot of $[\\lambda_0 \\mid x]$ and $[\\lambda_1 \\mid x]$ and their covariance."}
+theta1 %>% 
+  ggplot(aes(lambda_0, lambda_1)) +
+  geom_point() +
+  labs(
+    subtitle = sprintf("Cov(lambda_0, lambda_1 | x) = %.4f",
+                       with(theta1, cov(lambda_0, lambda_1)))
+  ) +
+  theme_minimal()
+```
+
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
@@ -548,6 +1129,8 @@ ggplot() +
   theme(plot.title = element_text(hjust = 0.5))
 ```
 
+
+# References
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 [//]: # ----------------------------------------------------------------------------------------------------------------
