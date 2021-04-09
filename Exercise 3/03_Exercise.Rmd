@@ -48,6 +48,8 @@ knitr::opts_knit$set(root.dir = "./Additional files")  # Changed working directo
 \newcommand{\dtheta}{\, \mathrm{d} \theta}
 \newcommand{\RR}{\mathbb{R}}
 \newcommand{\e}{\mathrm{e}}
+\newcommand{\vect}[1]{\ensuremath{\boldsymbol{\mathbf{#1}}}}  % vector
+\newcommand{\matr}[1]{\ensuremath{\boldsymbol{\mathbf{#1}}}}  % matrix
 
 
 ```{r libraries and help files, eval = TRUE, echo = FALSE}
@@ -89,8 +91,99 @@ source("probAhelp.R")  # Data
 
 # Problem C: The EM-algorithm and bootstrapping
 
-## Subproblem 1.
+Let $x_1,\ldots, x_n$ and $y_1,\ldots, y_n$ be independent random variables, with $x_i\sim\Exp(\lambda_0)$ and $y_i\sim\Exp(\lambda_1)$, for $i=1,\ldots n$.
+Assume that we do not observe $(x_i, y_i), i=1,\ldots,n$, directly.
+Instead, we observe
+\begin{equation}\label{eq:c-observed}
+  \begin{split}
+    z_i &= \max(x_i, y_i),\quad \text{for}\quad i=1,\ldots, n, \\
+    u_i &= I(x_i \geq y_i),\quad \text{for}\quad i=1,\ldots, n,
+  \end{split}
+\end{equation}
 
+where $I(\cdot)\in\{0, 1\}$ is the indicator function.
+
+Based on the observed values $(z_i, u_i), i=1,\ldots,n$, we will use the EM-algorithm to find the MLE for $(\lambda_0, \lambda_1)$.
+
+## Subproblem 1.
+Let $\vect x = (x_1,\ldots,x_n), \vect y = (y_1,\ldots, y_n), \vect z = (z_1, \ldots, z_n)$ and $\vect u = (u_1,\ldots, u_n)$.
+For the E-step we compute the expectation of the joint log likelihood for the complete data conditioned on the observed data.
+$$
+\begin{split}
+ Q(\lambda_0, \lambda_1\mid \lambda_0^{(t)},\lambda_1^{(t)}) &= \E\left[\log \mathcal L(\lambda_0,\lambda_1\mid \vect X, \vect Y) \mid \vect z, \vect u, \lambda_0^{(t)}, \lambda_1^{(t)}\right] \\
+ &= \E\left[\log f(\vect X, \vect Y\mid \lambda_0, \lambda_1)\mid \vect z, \vect u, \lambda_0^{(t)}, \lambda_1^{(t)}\right] \\
+ &= \E\left[\log\left(\prod_{i=1}^n f_X(X_i\mid\lambda_0)\cdot f_Y(Y_i\mid\lambda_1)\right)\mid \vect z, \vect u, \lambda_0^{(t)}, \lambda_1^{(t)}\right] \\
+ &= \E\left[\sum_{i=1}^n\log\left(\lambda_0\e^{-\lambda_0X_i}\cdot\lambda_1\e^{-\lambda_1Y_i}\right)\mid \vect z, \vect u, \lambda_0^{(t)}, \lambda_1^{(t)}\right] \\
+ &= \E\left[\sum_{i=1}^n\left(\log \lambda_0 + \log \lambda_1 - \lambda_0X_i - \lambda_1Y_i\right)\mid \vect z, \vect u, \lambda_0^{(t)}, \lambda_1^{(t)}\right] \\\\
+ &= n(\log\lambda_0 + \log \lambda_1) \\
+ &\quad -\lambda_0\sum_{i=1}^n\E\left[X_i\mid\vect z,\vect u, \lambda_0^{(t)},\lambda_1^{(t)}\right] \\
+ &\quad - \lambda_1\sum_{i=1}^n\E\left[Y_i\mid\vect z,\vect u, \lambda_0^{(t)},\lambda_1^{(t)}\right].
+\end{split}
+$$
+To evaluate the expectations in the last equality, we first do some simplifications.
+For $X_i,i=1,\ldots, n$, we have the following:
+\begin{equation}\label{eq:c-e-x}
+\begin{split}
+  \E\left[X_i\mid \vect z,\vect u, \lambda_0^{(t)},\lambda_1^{(t)} \right]
+  &=\E\left[X_i\mid \max(X_i, Y_i) = z_i, I(X_i\geq Y_i) = u_i, \lambda_0 = \lambda_0^{(t)},\lambda_1 = \lambda_1^{(t)}\right] \\
+  &=u_i\E\left[X_i\mid\max(X_i,Y_i) = z_i, X_i\geq Y_i,\lambda_0 = \lambda_0^{(t)},\lambda_1 = \lambda_1^{(t)}\right] \\
+  &\quad + (1 - u_i)\E\left[X_i\mid\max(X_i,Y_i) = z_i, X_i< Y_i,\lambda_0 = \lambda_0^{(t)},\lambda_1 = \lambda_1^{(t)}\right] \\
+  &= u_i\E\left[X_i\mid X_i = z_i\right] + (1 - u_i)\E\left[X_i\mid X_i < z_i,\lambda_0 = \lambda_0^{(t)}\right] \\
+  &=u_iz_i + (1 - u_i)\E\left[X_i\mid X_i < z_i,\lambda_0 = \lambda_0^{(t)}\right].
+\end{split}
+\end{equation}
+The expectation in the last equality is found by first computing the conditional cdf of $[X\mid X < z, \lambda]$, omitting the subscripts for computational convenience, as we will use the result for $Y_i,i=1,\ldots, n$ as well.
+
+$$
+\begin{split}
+  F(x\mid X < z,\lambda) &= \Pr(X < x\mid X < z,\lambda) \\
+  &= \frac{\Pr(X < x, X < z\mid\lambda)}{\Pr(X< z\mid \lambda)} \\
+  &= \frac{F_X(\min(x, z)\mid\lambda)}{F_X(z\mid \lambda)},
+\end{split}
+$$
+where $F_X(\cdot\mid\lambda)\sim\Exp(\lambda)$.
+The conditional pdf is then given by
+$$
+f(x\mid X< z,\lambda) = \frac{d}{dx}\frac{F_X(\min(x, z)\mid\lambda)}{F_X(z\mid \lambda)} = \frac{f_X(x\mid \lambda)}{F_X(z\mid \lambda)},\quad 0<x<z,
+$$
+giving the conditional expectation
+$$
+\begin{split}
+  \E\left[X\mid X < z,\lambda\right] &= \int_0^z x f(x\mid X< z,\lambda)\,\mathrm{d}x \\
+  &= \int_0^z x \frac{f_X(x\mid \lambda)}{F_X(z\mid \lambda)}\,\mathrm{d}x \\
+  &= \int_0^z x\frac{\lambda\e^{-\lambda x}}{1 - \e^{-\lambda z}}\,\mathrm d x \\
+  &= \frac{1}{1-\e^{-\lambda x}}\int_0^z \lambda x\e^{-\lambda x}\,\mathrm d x \\
+  &= \frac{1}{1-\e^{-\lambda x}}\left(\frac{1}{\lambda}(1 - \e^{-\lambda x} - \lambda z \e^{-\lambda z})\right) \\
+  &= \frac{1}{\lambda} - \frac{z\e^{-\lambda z}}{1 - \e^{-\lambda z}} \\
+  &= \frac{1}{\lambda} - \frac{z}{\exp\{\lambda z\} - 1}. \\
+\end{split}
+$$
+Inserting this result into Expression \eqref{eq:c-e-x} yields
+\begin{equation}\label{eq:c-e-x-final}
+  \E\left[X_i\mid \vect z,\vect u, \lambda_0^{(t)},\lambda_1^{(t)} \right] = u_iz_i - (1 - u_i)\left(\frac{1}{\lambda_0^{(t)}} - \frac{z_i}{\exp\{\lambda_0^{(t)} z_i\} - 1}\right).
+\end{equation}
+
+Similarly for $Y_i,i=1,\ldots,n$, we have that
+\begin{equation}\label{eq:c-e-y-final}
+\begin{split}
+  \E\left[Y_i\mid \vect z,\vect u, \lambda_0^{(t)},\lambda_1^{(t)} \right]
+  &=\E\left[Y_i\mid \max(X_i, Y_i) = z_i, I(X_i\geq Y_i) = u_i, \lambda_0 = \lambda_0^{(t)},\lambda_1 = \lambda_1^{(t)}\right] \\
+  &=(1 - u_i)\E\left[Y_i\mid\max(X_i,Y_i) = z_i, X_i < Y_i,\lambda_0 = \lambda_0^{(t)},\lambda_1 = \lambda_1^{(t)}\right] \\
+  &\quad + u_i\E\left[X_i\mid\max(X_i,Y_i) = z_i, X_i\geq Y_i,\lambda_0 = \lambda_0^{(t)},\lambda_1 = \lambda_1^{(t)}\right] \\
+  &= (1 - u_i)\E\left[Y_i\mid Y_i = z_i\right] + u_i\E\left[Y_i\mid Y_i \leq z_i,\lambda_1 = \lambda_1^{(t)}\right] \\
+  &=(1 - u_i)z_i + u_i\left(\frac{1}{\lambda_1^{(t)}} - \frac{z_i}{\exp\{\lambda_1^{(t)}z_i\} - 1}\right).
+\end{split}
+\end{equation}
+
+Thus, by substituting Expression \eqref{eq:c-e-x-final} and \eqref{eq:c-e-y-final} into the log-likelihood for the complete data $\vect x, \vect y$, conditional on the observed data $\vect z,\vect u$, we get
+\begin{equation}\label{eq:c-log-lik}
+\begin{split}
+  Q(\lambda_0,\lambda_1\mid \lambda_0^{(t)}, \lambda_1{(t)})
+  &= n(\log \lambda_0 + \log\lambda_1) \\
+  &\quad - \lambda_0\sum_{i=1}^n\left[u_iz_i - (1 - u_i)\left(\frac{1}{\lambda_0^{(t)}} - \frac{z_i}{\exp\{\lambda_0^{(t)} z_i\} - 1}\right)\right] \\
+  &\quad - \lambda_1\sum_{i=1}^n\left[(1 - u_i)z_i + u_i\left(\frac{1}{\lambda_1^{(t)}} - \frac{z_i}{\exp\{\lambda_1^{(t)}z_i\} - 1}\right)\right].
+\end{split}
+\end{equation}
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
