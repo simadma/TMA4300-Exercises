@@ -42,9 +42,11 @@ knitr::opts_knit$set(root.dir = "./Additional files")  # Changed working directo
 \newcommand{\argmin}{\operatorname*{arg\,min}}
 \newcommand{\argmax}{\operatorname*{arg\,max}}
 \newcommand{\bfy}{\mathbf{y}}
+\newcommand{\bfx}{\mathbf{x}}
 \newcommand{\bff}{\mathbf{f}}
 \newcommand{\bfzero}{\mathbf{0}}
 \newcommand{\bfeta}{\boldsymbol{\eta}}
+\newcommand{\bfbeta}{\boldsymbol{\beta}}
 \newcommand{\dtheta}{\, \mathrm{d} \theta}
 \newcommand{\RR}{\mathbb{R}}
 \newcommand{\e}{\mathrm{e}}
@@ -52,20 +54,128 @@ knitr::opts_knit$set(root.dir = "./Additional files")  # Changed working directo
 
 ```{r libraries and help files, eval = TRUE, echo = FALSE}
 library(tidyverse)  # Collection of R packages designed for data science
+library(matrixStats)  # For row- and column-wise variance and mean of matrices
 
 # Extract pre-programmed R-code
-source("probAdata.R")  # Code
-source("probAhelp.R")  # Data
+source("probAdata.R")  # Data
+source("probAhelp.R")  # Code
 ```
 
 # Problem A: Comparing AR(2) parameter estimators using resampling of residuals
 
+We consider here the $\mathrm{AR}(2)$ model specified by the relation
+$$
+  x_t = \beta_1 x_{t-1} + \beta_2 x_{t-2} + e_t,
+$$
+where $e_t$ are i.i.d. random variables with zero mean and unit variance, for $t=3, \dots, T$. In our case we analyze the data in `data3A$x`, which is of length $T=100$, and has the form as in Figure \ref{fig:time_series}.
+```{r Time series, fig.width = 5, fig.height = 3, fig.cap="\\label{fig:time_series}Time seres data."}
+
+x <- data3A$x
+TT <- length(x)
+plot(1:TT, x, xlab = "t", ylab = "x")
+
+```
+
+The minimizers $\hat{\bfbeta}_\mathrm{LS}$ and $\hat{\bfbeta}_\mathrm{LA}$ are obtained by minimizing
+$$
+  Q_\mathrm{LS}(\bfx) = \sum_{t=3}^T (x_t - \beta_1 x_{t-1} - \beta_2 x_{t-2})^2
+  \quad \text{and} \quad
+  Q_\mathrm{LA}(\bfx) = \sum_{t=3}^T |x_t - \beta_1 x_{t-1} - \beta_2 x_{t-2}|,
+$$
+with respect to $\bfbeta = \begin{bmatrix} \beta_1 & \beta_2 \end{bmatrix}^\top$, respectively. We can then define the estimated residuals $\hat{e}_t = x_t - \hat{\beta}_1 x_{t-1} + \hat{\beta}_2 x_{t-2}$, for $t=3,\dots,T$, and if we let $\bar{e}$ be the mean of these, $\hat{\varepsilon}_t = \hat{e}_t - \bar e$ has mean zero.
+
 ## Subproblem 1.
+In the following code block we generate $B=2000$ bootstrap samples of the residuals, containing $T$ elements randomly sampled from the estimated residuals with replacement. From the sampled residuals the $\mathrm{AR}(2)$ sequence is resampled for each $b = 1, \dots, B$, where the initial values $x_\tau$ and $x_{\tau+1}$ are chosen randomly for each new process.
+
+```{r AR(2)}
+
+# Estimates for the betas:
+betas <- ARp.beta.est(x, 2)
+# Corresponding residuals:
+res_LS <- ARp.resid(x, betas$LS)
+res_LA <- ARp.resid(x, betas$LA)
+
+# Bootstrap:
+B <- 2000   # Number of bootstrap samples
+n <- length(res_LS)   # = length(res_LA) is the size of resampling
+# Initialize to store samples:
+boot_beta_LS <- matrix(NA, nrow = 2, ncol = B)
+boot_beta_LA <- matrix(NA, nrow = 2, ncol = B)
+boot_res_LS <- matrix(NA, nrow = n, ncol = B)
+boot_res_LA <- matrix(NA, nrow = n, ncol = B)
+
+for(b in 1:B) {
+  # Sample the residuals:
+  sample_LS <- sample(res_LS, n, replace = TRUE)
+  sample_LA <- sample(res_LA, n, replace = TRUE)
+  # Calculate AR(2) sequence and betas:
+  x_LS <- ARp.filter(x[rep(sample(99, 1), 2) + c(0, 1)], betas$LS, sample_LS)
+  x_LA <- ARp.filter(x[rep(sample(99, 1), 2) + c(0, 1)], betas$LA, sample_LA)
+  beta_boot_LS <- ARp.beta.est(x_LS, 2)$LS
+  beta_boot_LA <- ARp.beta.est(x_LA, 2)$LA
+  # Append betas to the bootstrap matrices:
+  boot_beta_LS[, b] <- beta_boot_LS
+  boot_beta_LA[, b] <- beta_boot_LA
+  # Append residuals (for use in Subproblem 2):
+  boot_res_LS[, b] <- ARp.resid(x_LS, beta_boot_LS)
+  boot_res_LA[, b] <- ARp.resid(x_LA, beta_boot_LA)
+}
+
+```
+
+We can then find the estimated variances of $\hat{\bfbeta}_\mathrm{LS}$ and $\hat{\bfbeta}_\mathrm{LA}$, and also their bias. The results are shown in the following code block.
+
+```{r AR(2) results}
+
+# Estimated variances of beta1 and beta2 for LS and LA:
+rowVars(boot_beta_LS)
+rowVars(boot_beta_LA)
+
+# Estimated bias of beta1 and beta2 for LS and LA:
+rowMeans(boot_beta_LS) - betas$LS
+rowMeans(boot_beta_LA) - betas$LA
+
+```
+
+From this we see that the estimated variance of $\hat{\bfbeta}_\mathrm{LA}$ is smaller than that of $\hat{\bfbeta}_\mathrm{LS}$, and this is also true for the estimated bias. This suggests that the LS estimator is not optimal for the $\mathrm{AR}(2)$ process.
+
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 2.
+In this part we want to compute a 95% prediction interval for $x_{101}$ based on the LS and the LA estimators, using the bootstrapped time series and parameter estimates obtained earlier. For this we use `boot_res_LS` and `boot_res_LA`, as we found in the last part. Using this we can simulate
+$$
+  x_{101} = \hat{\beta}_1 x_{100} + \hat{\beta}_2 x_{99} + \hat{\varepsilon}_{101},
+$$
+where $\hat{\bfbeta}$ is either $\hat{\bfbeta}_\mathrm{LS}$ or $\hat{\bfbeta}_\mathrm{LA}$, and $\hat{\varepsilon}_{101}$ is sampled at random from the residual sample. We can use the residuals as samples for $\hat{\varepsilon}_{101}$ because they are assumed to be independent identically distributed. We do this in the following code block for the LS and the LA estimators.
+
+```{r AR(2) prediction interval}
+
+# Finding x_101 for the two estimators:
+x_101_LS <- boot_beta_LS[1, ] * x[TT] + boot_beta_LS[2, ] * x[TT-1] +
+            sample(boot_res_LS, B, replace = TRUE)
+x_101_LA <- boot_beta_LA[1, ] * x[TT] + boot_beta_LA[2, ] * x[TT-1] +
+            sample(boot_res_LA, B, replace = TRUE)
+
+# The prediction intervals for x_101 for LS and LA:
+c(quantile(x_101_LS, 0.025), quantile(x_101_LS, 0.975))
+c(quantile(x_101_LA, 0.025), quantile(x_101_LA, 0.975))
+
+```
+
+We see that the 95% prediction interval for $x_{101}$ using the LS estimator is a little wider than using the LA estimator. The prediction interval using the LS estimator is shown in red in Figure \ref{fig:prediction_intervals}, while the prediction interval using the LA estimator is shown in blue in the same figure. From this we see that it is reasonable that these are reasonable values for the 95% prediction intervals for $x_{101}$.
+
+```{r Time series with prediction intervals, fig.cap="\\label{fig:prediction_intervals}Time seres data with the 95% prediction intervals for $x_{101}$ using the LS estimator in red and using the LA estimator in blue."}
+
+plot(1:TT, x, xlab = "t", ylab = "x")
+abline(h = quantile(x_101_LS, 0.025), col = "red")
+abline(h = quantile(x_101_LS, 0.975), col = "red")
+abline(h = quantile(x_101_LA, 0.025), col = "blue")
+abline(h = quantile(x_101_LA, 0.975), col = "blue")
+
+```
+
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
