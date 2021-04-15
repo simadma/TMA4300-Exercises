@@ -220,7 +220,11 @@ which gives the maximizer
   \end{pmatrix}.
 \end{equation}
 
-We then implement the EM-algorithm as follows.
+We then implement the EM-algorithm with the convergence criterion that
+
+$$
+  \left\|\vect \lambda^{(t + 1)} - \vect \lambda^{(t)}\right\|_2 < \epsilon = 10^{-10},\quad \vect \lambda^{(t)} = (\lambda_0^{(t)}, \lambda_1^{(t)}).
+$$
 
 ```{r em-alg}
 
@@ -242,22 +246,38 @@ EM <- function(z, u, lambda, itermax = 100, tol = 1e-5) {
     }
     lambda <- lambda_next
   }
-  print(i)
   list(lambda = lambda_next, log_liks = log_liks)
 }
 ```
 Looking at Figure \ref{fig:em-observed}, we can make an initial guess for the rate parameters.
-Since we see a higher proportion of $u=1$, we expect $y$ to have a lower mean than what $[z\mid u=0]$ shows.
-We guess that $\E[X]$ lies in the neighborhood of 0.4, and that $\E[Y]$ lies in the neighborhood of 0.1, giving the initial guess $(\lambda_0^{(0)}, \lambda_1^{(0)}) = (1/0.4, 1/0.1) = (2.5, 10)$.
+Since we only see the maximum of $x$ and $y$, we expect that $\E[X] < \E[Z\mid U=1]$ and $\E[Y]< \E[Z\mid U=0]$.
 
+```{r mean-observed}
+cat(sprintf("mean of z given u = 1: %.1f\nmean of z given u = 0: %.1f",
+            mean(z[u == 1]), mean(z[u == 0])))
+```
+We then use the starting values $(\lambda_0^{(0)}, \lambda_1^{(0)}) = (1/0.4, 1/0.2) = (2.5, 5)$, expecting the final estimates $(\hat\lambda_0,\hat\lambda_1)$ to be larger.
 
-```{r em-convergence, fig.align='center', fig.width=5, fig.height=3, fig.cap="caption..."}
-EM_result <- EM(z, u, c(2.5, 10), tol = 1e-10)
-EM_result$lambda
+```{r}
+EM_result <- EM(z, u, c(2.5, 5), tol = 1e-10)
+cat(sprintf("Estimate of lambda_%d: %.2f\n", 0:1, EM_result$lambda))
+```
 
+We get the estimates
+$$
+ (\hat\lambda_0, \hat\lambda_1) = (3.47, 9.35),
+$$
+which is higher than the initial values as expected.
+
+A convergence plot of the $Q(\cdot)$-function is seen in Figure \ref{fig:em-convergence}.
+We see that it converges very fast.
+After 6 iterations, it stabilizes, while making small adjustments as we had set a quite strict convergence criterion.
+
+```{r em-convergence, fig.align='center', fig.width=5, fig.height=3, fig.cap="Convergence plot of estimated expectation of the joint log likelihood for the complete data conditional on the observed data."}
 tibble(index = 1:length(EM_result$log_liks), log_liks = EM_result$log_liks) %>%
   ggplot(aes(index, log_liks)) +
   geom_point() +
+  labs(x = "iteration", y = expression(Q(lambda^{t+1}*"|"*lambda^t))) +
   theme_minimal()
 ```
 
