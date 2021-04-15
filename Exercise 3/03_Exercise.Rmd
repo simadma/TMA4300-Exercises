@@ -101,9 +101,21 @@ Instead, we observe
   \end{split}
 \end{equation}
 
-where $I(\cdot)\in\{0, 1\}$ is the indicator function.
+where $I(\cdot)\in\{0, 1\}$ is the indicator function. A histogram of the observed data is shown in Figure \ref{fig:em-observed}.
 
 Based on the observed values $(z_i, u_i), i=1,\ldots,n$, we will use the EM-algorithm to find the MLE for $(\lambda_0, \lambda_1)$.
+
+```{r em-observed, echo = FALSE, fig.align='center', fig.width=5, fig.height=3, fig.cap="The observed data"}
+## Read observed data
+z <- scan("z.txt")  # max(x, y)
+u <- scan("u.txt")  # I(x >= y)
+
+tibble(z = z, u = factor(u)) %>% ggplot(aes(x = z, fill = u)) +
+  geom_histogram(position = "identity", alpha = 0.5, bins = 50) +
+  labs(fill = expression(u==I(x >= y)), x = "z = max(x, y)") +
+  theme_minimal()
+```
+
 
 ## Subproblem 1.
 Let $\vect x = (x_1,\ldots,x_n), \vect y = (y_1,\ldots, y_n), \vect z = (z_1, \ldots, z_n)$ and $\vect u = (u_1,\ldots, u_n)$.
@@ -160,7 +172,7 @@ $$
 $$
 Inserting this result into Expression \eqref{eq:c-e-x} yields
 \begin{equation}\label{eq:c-e-x-final}
-  \E\left[X_i\mid \vect z,\vect u, \lambda_0^{(t)},\lambda_1^{(t)} \right] = u_iz_i - (1 - u_i)\left(\frac{1}{\lambda_0^{(t)}} - \frac{z_i}{\exp\{\lambda_0^{(t)} z_i\} - 1}\right).
+  \E\left[X_i\mid \vect z,\vect u, \lambda_0^{(t)},\lambda_1^{(t)} \right] = u_iz_i + (1 - u_i)\left(\frac{1}{\lambda_0^{(t)}} - \frac{z_i}{\exp\{\lambda_0^{(t)} z_i\} - 1}\right).
 \end{equation}
 
 Similarly for $Y_i,i=1,\ldots,n$, we have that
@@ -178,9 +190,9 @@ Similarly for $Y_i,i=1,\ldots,n$, we have that
 Thus, by substituting Expression \eqref{eq:c-e-x-final} and \eqref{eq:c-e-y-final} into the log-likelihood for the complete data $\vect x, \vect y$, conditional on the observed data $\vect z,\vect u$, we get
 \begin{equation}\label{eq:c-log-lik}
 \begin{split}
-  Q(\lambda_0,\lambda_1\mid \lambda_0^{(t)}, \lambda_1{(t)})
+  Q(\lambda_0,\lambda_1\mid \lambda_0^{(t)}, \lambda_1^{(t)})
   &= n(\log \lambda_0 + \log\lambda_1) \\
-  &\quad - \lambda_0\sum_{i=1}^n\left[u_iz_i - (1 - u_i)\left(\frac{1}{\lambda_0^{(t)}} - \frac{z_i}{\exp\{\lambda_0^{(t)} z_i\} - 1}\right)\right] \\
+  &\quad - \lambda_0\sum_{i=1}^n\left[u_iz_i + (1 - u_i)\left(\frac{1}{\lambda_0^{(t)}} - \frac{z_i}{\exp\{\lambda_0^{(t)} z_i\} - 1}\right)\right] \\
   &\quad - \lambda_1\sum_{i=1}^n\left[(1 - u_i)z_i + u_i\left(\frac{1}{\lambda_1^{(t)}} - \frac{z_i}{\exp\{\lambda_1^{(t)}z_i\} - 1}\right)\right].
 \end{split}
 \end{equation}
@@ -188,6 +200,68 @@ Thus, by substituting Expression \eqref{eq:c-e-x-final} and \eqref{eq:c-e-y-fina
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 2.
+
+The M-step of the EM-algorithm is to maximize $Q(\lambda_0,\lambda_1\mid\lambda_0^{(t)}, \lambda_1^{(t)})$ with respect to $(\lambda_0,\lambda_1)$, and set the $(\lambda_0^{(t+1)}, \lambda_1^{(t+1)})$ equal to the maximizer of $Q$.
+We find the maximizer by taking the partial derivatives of Expression \eqref{eq:c-log-lik}, setting them equal to zero.
+We have
+$$
+\begin{split}
+  \frac{\partial}{\partial \lambda_0} Q(\lambda_0,\lambda_1\mid\lambda_0^{(t)},\lambda_1^{(t)})
+  &= \frac{n}{\lambda_0} - \sum_{i=1}^n\left[u_iz_i + (1 - u_i)\left(\frac{1}{\lambda_0^{(t)}} - \frac{z_i}{\exp\{\lambda_0^{(t)} z_i\} - 1}\right)\right] = 0, \\
+  \frac{\partial}{\partial \lambda_1} Q(\lambda_0,\lambda_1\mid\lambda_0^{(t)},\lambda_1^{(t)})
+  &= \frac{n}{\lambda_1} - \sum_{i=1}^n\left[(1 - u_i)z_i + u_i\left(\frac{1}{\lambda_1^{(t)}} - \frac{z_i}{\exp\{\lambda_1^{(t)} z_i\} - 1}\right)\right] = 0,
+\end{split}
+$$
+which gives the maximizer
+\begin{equation}\label{eq:m-step}
+  \begin{pmatrix}\lambda_0^{(t+1)} \\[3mm] \lambda_1^{(t+1)}\end{pmatrix} =
+  \begin{pmatrix}\left.n\middle/\sum_{i=1}^n\left[u_iz_i + (1 - u_i)\left(\frac{1}{\lambda_0^{(t)}} - \frac{z_i}{\exp\{\lambda_0^{(t)} z_i\} - 1}\right)\right]\right. \\[5mm]
+  \left.n\middle/\sum_{i=1}^n\left[(1 - u_i)z_i + u_i\left(\frac{1}{\lambda_1^{(t)}} - \frac{z_i}{\exp\{\lambda_1^{(t)} z_i\} - 1}\right)\right]\right.
+  \end{pmatrix}.
+\end{equation}
+
+We then implement the EM-algorithm as follows.
+
+```{r em-alg}
+
+Q_func <- function(lambda, lambda_next, z, u) {
+  length(z)*(log(lambda_next[1]) + log(lambda_next[2])) -
+    lambda_next[1]*sum(u*z + (1 - u)*(1/lambda[1] - z/(exp(lambda[1]*z) - 1))) -
+    lambda_next[2]*sum((1 - u)*z + u*(1/lambda[2] - z/(exp(lambda[2]*z) - 1)))
+}
+
+EM <- function(z, u, lambda, itermax = 100, tol = 1e-5) {
+  lambda_next <- numeric(2)
+  log_liks <- numeric(0)
+  for (i in 1:itermax) {
+    lambda_next[1] <- 1 / mean(u*z + (1 - u)*(1/lambda[1] - z/(exp(lambda[1]*z) - 1)))
+    lambda_next[2] <- 1 / mean((1 - u)*z + u*(1/lambda[2] - z/(exp(lambda[2]*z) - 1)))
+    log_liks <- c(log_liks, Q_func(lambda, lambda_next, z, u))
+    if(norm(lambda_next - lambda, type = "2") < tol) {
+      break
+    }
+    lambda <- lambda_next
+  }
+  print(i)
+  list(lambda = lambda_next, log_liks = log_liks)
+}
+```
+Looking at Figure \ref{fig:em-observed}, we can make an initial guess for the rate parameters.
+Since we see a higher proportion of $u=1$, we expect $y$ to have a lower mean than what $[z\mid u=0]$ shows.
+We guess that $\E[X]$ lies in the neighborhood of 0.4, and that $\E[Y]$ lies in the neighborhood of 0.1, giving the initial guess $(\lambda_0^{(0)}, \lambda_1^{(0)}) = (1/0.4, 1/0.1) = (2.5, 10)$.
+
+
+```{r em-convergence, fig.align='center', fig.width=5, fig.height=3, fig.cap="caption..."}
+EM_result <- EM(z, u, c(2.5, 10), tol = 1e-10)
+EM_result$lambda
+
+tibble(index = 1:length(EM_result$log_liks), log_liks = EM_result$log_liks) %>%
+  ggplot(aes(index, log_liks)) +
+  geom_point() +
+  theme_minimal()
+```
+
+
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
