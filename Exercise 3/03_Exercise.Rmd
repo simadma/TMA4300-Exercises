@@ -2,12 +2,16 @@
 title: "Exercise 3"
 author: "Mads Adrian Simonsen, William Scott Grundeland Olsen"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
+header-includes:
+  - \usepackage{booktabs}
 output:
   pdf_document: default
   github_document: default
   html_document:
     df_print: paged
 subtitle: TMA4300 Computer Intensive Statistical Models
+urlcolor: blue
+bibliography: ref.bib
 ---
 
 ```{r setup, include=FALSE}
@@ -50,8 +54,8 @@ knitr::opts_knit$set(root.dir = "./Additional files")  # Changed working directo
 \newcommand{\e}{\mathrm{e}}
 
 
-```{r libraries and help files, eval = TRUE, echo = FALSE}
-library(tidyverse)  # Collection of R packages designed for data science
+```{r libraries and help files, echo = FALSE}
+library(tidyverse)   # Collection of R packages designed for data science
 
 # Extract pre-programmed R-code
 source("probAdata.R")  # Code
@@ -73,16 +77,105 @@ source("probAhelp.R")  # Data
 
 # Problem B: Permutation test
 
+[Bilirubin](http://en.wikipedia.org/wiki/Bilirubin) is a breakdown product of hemoglobin, which is a principal component of red blood cells. If the liver has suffered degeneration,  the decomposition of hemoglobin is elevated, or the gall bladder has been destroyed, large amounts of bilirubin can accumulate in the blood, leading to jaundice, which is a yellowish or greenish pigmentation in the skin.
+
+We will look at a data set taken from [@jorgensen1993theory]. It contains measurements of the concentration of bilirubin (mg/dL) in blood samples taken from an three young men, shown in Table \ref{tab:bilirubin}.
+
+```{r bilirubin, echo = FALSE}
+bilirubin <- read.table("bilirubin.txt", header = TRUE)
+bilirubin %>%
+  group_by(pers) %>% 
+  mutate(row = row_number()) %>% 
+  pivot_wider(names_from = pers, values_from = meas) %>% 
+  select(-row) %>%
+  set_names(1:3) %>% 
+  t() %>% 
+  kableExtra::kbl(booktabs = TRUE, format = "latex", row.names = TRUE,
+                  caption = "The measurements of bilirubin in three individuals.") %>% 
+  kableExtra::kable_styling() %>% 
+  kableExtra::add_header_above(c("Individual", "Concentration (mg/dL)" = 11))
+```
+
+We will use the $F$-statistic perform a permutation test.
+
 ## Subproblem 1.
+
+We set up the following regression model
+\begin{equation}\label{eq:B-lm}
+\log Y_{ij} = \beta_i + \epsilon_{ij},\quad \text{with}\quad i=1,2,3,\quad \text{and} j = 1,\ldots, n_i,
+\end{equation}
+where $n_i$ are the number of measurements from individual $i$, and $\epsilon_{ij}\sim\Normal(0,\sigma^2)$.
+We want to test if the concentration of bilirubin of the three young men are significantly different, so we set up the following hypothesis test
+$$
+  H_0 : \beta_1=\beta_2=\beta_3\quad\text{against}\quad H_1 : \exists i,j \in\{1,2,3\} : \beta_i\neq\beta_j.
+$$
+
+A boxplot of the log measurements for each individual is shown in Figure \ref{fig:B-bilirubin-box}, where we see that individual 1 and individual 2 have similar mean measurements, albeit having different spread. Individual 3 stands out from the two others.
+
+```{r bilirubin fit, fig.width=4, fig.height=3, fig.align='center', fig.cap="\\label{fig:B-bilirubin-box}Box plot showing the log concentration of biliburin from the three young men."}
+bilirubin %>% 
+  ggplot(aes(pers, log(meas))) +
+  geom_boxplot() +
+  theme_minimal()
+
+(lm_fit_summary <- summary(lm(log(meas) ~ pers, bilirubin)))
+Fval <- lm_fit_summary$fstatistic[1]
+```
+
+The summary output shows the $F$-statistic on 2 and 26 degrees of freedom with the respective $p$-value of `r lm_fit_summary$fstatistic[2]``. With a significance level of $5\%$, we reject the null hypothesis and say there is evidence of the individuals having different concentrations of bilirubin.
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 2.
 
+We create a permutation test function, where we shuffle the individual labels to the data and re-fit a linear model according to \eqref{eq:B-lm} and return the $F$-statistic.
+
+```{r perm}
+# Generates permutation of the data, fitting a linear model and returning the F statistic
+# data: dataframe consisting of two variables, response and covariate
+permTest <- function(data) {
+  # gives formula log(y) ~ x, where y is reshuffled
+  perm_formula <- update(formula(data), sample(log(.)) ~ .)
+  # returns F statistic
+  summary(lm(perm_formula, data))$fstatistic[1]
+}
+```
+
+
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 3.
+We now perform the permutation test with a sample size of 999.
+A histogram of the $F$-statistics is shown in Figure \ref{fig:B-F-hist}. We see it fits well under the curve of the theoretical density of the $F$ distribution.
+
+```{r testing perm, fig.width=5, fig.height=3, fig.align='center', fig.cap="\\label{fig:B-F-hist}Normalized histogram of F-statistic from 999 permutations of the \\texttt{bilirubin.txt} data together with the theoretical $F$ distribution on 2 and 26 degrees of freedom. The vertical line is the $F$-statistic of the original model."}
+set.seed(42)
+Fvals <- replicate(n = 999, permTest(bilirubin))
+
+tibble(Fvals = Fvals, Fval = Fval) %>% 
+  ggplot(aes(Fvals)) +
+  geom_histogram(
+    mapping = aes(y = after_stat(density)),
+    breaks  = seq(0, max(Fvals), by=0.2)
+    ) +
+  geom_function(
+    mapping = aes(color = "Theoretical density"),
+    fun     = df,
+    n       = 1001,
+    args    = list(df1 = 2, df2 = 26)
+  ) +
+  geom_vline(aes(xintercept = Fval, color = "F-value")) +
+  theme_minimal()
+```
+
+The calculated $p$-value from the permutation test is given below.
+```{r testing perm p-val}
+p_val <- mean(Fvals > Fval)
+print(sprintf("p-value =  %.5f", p_val))
+```
+
+This value corresponds well with the $p$-value from the summary output of the original model. Again, with a significance level of $5\%$ we reject the null hypothesis and say there is evidence of the three young men having different levels of bilirubin.
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 [//]: # ----------------------------------------------------------------------------------------------------------------
@@ -106,3 +199,5 @@ source("probAhelp.R")  # Data
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 [//]: # ----------------------------------------------------------------------------------------------------------------
+
+# References
