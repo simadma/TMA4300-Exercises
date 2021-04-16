@@ -323,7 +323,7 @@ param_boot <- function(lambda_hat, B = 10000, itermax = 300, tol = 1e-5) {
   for (i in 1:B) {
     x_star <- rexp(n, lambda_hat[1])
     y_star <- rexp(n, lambda_hat[2])
-    z_star <- max(x_star, y_star)
+    z_star <- pmax(x_star, y_star)
     u_star <- 1*(x_star >= y_star)
     lambda_star <- EM(z_star, u_star, lambda_hat, itermax, tol)$lambda
     lambda_list[i,] <- lambda_star
@@ -338,7 +338,7 @@ param_boot <- function(lambda_hat, B = 10000, itermax = 300, tol = 1e-5) {
 
 
 ```{r}
-set.seed(92)
+set.seed(93)
 result <- param_boot(EM_result$lambda)
 result
 ```
