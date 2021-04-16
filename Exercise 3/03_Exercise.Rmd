@@ -109,8 +109,8 @@ for(b in 1:B) {
   sample_LS <- sample(res_LS, n, replace = TRUE)
   sample_LA <- sample(res_LA, n, replace = TRUE)
   # Calculate AR(2) sequence and betas:
-  x_LS <- ARp.filter(x[rep(sample(99, 1), 2) + c(0, 1)], betas$LS, sample_LS)
-  x_LA <- ARp.filter(x[rep(sample(99, 1), 2) + c(0, 1)], betas$LA, sample_LA)
+  x_LS <- ARp.filter(x[rep(sample(TT-1, 1), 2) + c(0, 1)], betas$LS, sample_LS)
+  x_LA <- ARp.filter(x[rep(sample(TT-1, 1), 2) + c(0, 1)], betas$LA, sample_LA)
   beta_boot_LS <- ARp.beta.est(x_LS, 2)$LS
   beta_boot_LA <- ARp.beta.est(x_LA, 2)$LA
   # Append betas to the bootstrap matrices:
