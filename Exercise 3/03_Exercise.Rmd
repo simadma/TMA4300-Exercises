@@ -2,6 +2,8 @@
 title: "Exercise 3"
 author: "Mads Adrian Simonsen, William Scott Grundeland Olsen"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
+header-includes:
+  - \usepackage[ruled,vlined,linesnumbered]{algorithm2e}
 output:
   pdf_document: default
   github_document: default
@@ -286,6 +288,61 @@ tibble(index = 1:length(EM_result$log_liks), log_liks = EM_result$log_liks) %>%
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 3.
+
+
+Seen in Algorithm \ref{alg:c-bootstrap}.
+
+\begin{algorithm}[H]\label{alg:c-bootstrap}
+\SetAlgoLined
+\KwResult{Standard deviations, biases and correlation of $\hat\lambda_0,\hat\lambda_1$}
+  set $(\lambda_0^{(0)},\lambda_1^{(0)})\leftarrow(\hat\lambda_0,\hat\lambda_1)$\;
+  set $n\leftarrow200$\;
+  initialize $\vect\lambda$-List of length $B$\;
+  \For{$i\leftarrow 1$ \KwTo $B$}{
+    Draw $x_1^*, \ldots, x_n^*\sim\Exp(\hat\lambda_0)$\;
+    Draw $y_1^*, \ldots, y_n^*\sim\Exp(\hat\lambda_1)$\;
+    initialize $n$-vectors $\vect z^*$ and $\vect u^*$\;
+    \For{$j\leftarrow 1$ \KwTo $n$}{
+      $z_j^*\leftarrow \max(x_j^*, y_j^*)$\;
+      $u_j^*\leftarrow I(x_j^*\geq y_j^*)$\;
+    }
+    $(\hat\lambda_0^*, \hat\lambda_1^*)\leftarrow$ EM-algorithm$\left(\vect z^*,\vect u^*, (\lambda_0^{(0)}, \lambda_1^{(0)})\right)$\;
+    $\vect \lambda$-list[$i$]$\leftarrow(\hat\lambda_0^*, \hat\lambda_1^*)$\;
+  }
+  Compute sample standard deviation $(\hat\sigma_{\lambda_0},\hat\sigma_{\lambda_1})$ from $\vect\lambda$-list\;
+  Compute sample mean $(\hat\mu_{\lambda_0},\hat\mu_{\lambda_1})$ from $\vect\lambda$-list\;
+  bias$_{(\hat\lambda_0,\hat\lambda_1)}\leftarrow (\hat\mu_{\lambda_0},\hat\mu_{\lambda_1}) - (\hat\lambda_0,\hat\lambda_1)$\;
+  Compute sample correlation $\hat\rho$ from $\vect\lambda$-list\;
+ \caption{Parametric bootstrapping for inference of $(\hat\lambda_0,\hat\lambda_1)$}
+\end{algorithm}
+
+```{r param-bootstrap}
+param_boot <- function(lambda_hat, B = 10000, itermax = 300, tol = 1e-5) {
+  n <- 200
+  lambda_list <- matrix(numeric(2*B), nrow = B)
+  for (i in 1:B) {
+    x_star <- rexp(n, lambda_hat[1])
+    y_star <- rexp(n, lambda_hat[2])
+    z_star <- max(x_star, y_star)
+    u_star <- 1*(x_star >= y_star)
+    lambda_star <- EM(z_star, u_star, lambda_hat, itermax, tol)$lambda
+    lambda_list[i,] <- lambda_star
+  }
+  sigma_hat <- apply(lambda_list, 2, sd)
+  mu_hat <- apply(lambda_list, 2, mean)
+  bias <- mu_hat - lambda_hat
+  rho_hat <- cor(lambda_list[, 1], lambda_list[, 2])
+  list(sample_sd = sigma_hat, bias = bias, sample_cor = rho_hat)
+}
+```
+
+
+```{r}
+set.seed(92)
+result <- param_boot(EM_result$lambda)
+result
+```
+
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
