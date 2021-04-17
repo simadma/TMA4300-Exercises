@@ -233,24 +233,38 @@ $$
 $$
 
 ```{r em-alg}
-
+# Computes the expectation of the log-likelihood of the complete data given the
+# observational data
+# lambda:      (lambda_0^{(t)}, lambda_1^{(t)})
+# lambda_next: (lambda_0^{(t + 1)}, lambda_1^{(t + 1)})
+# z:           observed data, max(x, y)
+# u:           observed data, I(x >= y)
 Q_func <- function(lambda, lambda_next, z, u) {
   length(z)*(log(lambda_next[1]) + log(lambda_next[2])) -
     lambda_next[1]*sum(u*z + (1 - u)*(1/lambda[1] - z/(exp(lambda[1]*z) - 1))) -
     lambda_next[2]*sum((1 - u)*z + u*(1/lambda[2] - z/(exp(lambda[2]*z) - 1)))
 }
 
-EM <- function(z, u, lambda, itermax = 100, tol = 1e-5) {
+# Computes the MLE of lambda_0 and lambda_1 given the observed data using the EM-algorithm
+# Additionally, it returns the list of recorded log-likelihood values from the iterations
+# z:       observed data, max(x, y)
+# u:       observed data, I(x >= y)
+# lambda:  starting values (lambda_0^{(0)}, lambda_1^{(0)})
+# itermax: maximum number of iterations
+# tol:     convergence tolerance value 
+EM <- function(z, u, lambda, itermax = 300, tol = 1e-10) {
   lambda_next <- numeric(2)
   log_liks <- numeric(0)
   for (i in 1:itermax) {
+    # update (lambda_0^{(t + 1)}, lambda_1^{(t + 1)})
     lambda_next[1] <- 1 / mean(u*z + (1 - u)*(1/lambda[1] - z/(exp(lambda[1]*z) - 1)))
     lambda_next[2] <- 1 / mean((1 - u)*z + u*(1/lambda[2] - z/(exp(lambda[2]*z) - 1)))
-    log_liks <- c(log_liks, Q_func(lambda, lambda_next, z, u))
+    log_liks <- c(log_liks, Q_func(lambda, lambda_next, z, u))  # add Q-value
+    # check convergence
     if(norm(lambda_next - lambda, type = "2") < tol) {
       break
     }
-    lambda <- lambda_next
+    lambda <- lambda_next  # update (lambda_0^{(t)}, lambda_1^{(t)})
   }
   list(lambda = lambda_next, log_liks = log_liks)
 }
@@ -293,8 +307,8 @@ tibble(index = 1:length(EM_result$log_liks), log_liks = EM_result$log_liks) %>%
 
 ## Subproblem 3.
 
-
-Seen in Algorithm \ref{alg:c-bootstrap}.
+To get an idea of the biasedness and confidence in the estimated values, we perform a parametric bootstrap.
+The procedure is shown in Algorithm \ref{alg:c-bootstrap}.
 
 \begin{algorithm}[H]\label{alg:c-bootstrap}
 \SetAlgoLined
@@ -320,33 +334,46 @@ Seen in Algorithm \ref{alg:c-bootstrap}.
  \caption{Parametric bootstrapping for inference of $(\hat\lambda_0,\hat\lambda_1)$}
 \end{algorithm}
 
+We implement this algorithm below.
+
 ```{r param-bootstrap}
+# performs a parametric bootstrap of the estimated parameters, and returns an estimate of
+# the standard deviation, bias, and correlation of (hat_lambda_0, hat_lambda_1)
+# lamba_hat: estimated parameters from the EM-algorithm
+# B:         number of bootstrap samples
+# itermax:   maximum iterations in the EM-algorithm
+# tol:       convergence tolerance in the EM-algorithm
 param_boot <- function(lambda_hat, B = 10000, itermax = 300, tol = 1e-5) {
-  n <- 200
+  n <- 200  # number of observations
   lambda_list <- matrix(numeric(2*B), nrow = B)
   for (i in 1:B) {
-    x_star <- rexp(n, lambda_hat[1])
-    y_star <- rexp(n, lambda_hat[2])
-    z_star <- pmax(x_star, y_star)
-    u_star <- 1*(x_star >= y_star)
-    lambda_star <- EM(z_star, u_star, lambda_hat, itermax, tol)$lambda
-    lambda_list[i,] <- lambda_star
+    x_star <- rexp(n, lambda_hat[1])  # draw x*
+    y_star <- rexp(n, lambda_hat[2])  # draw y*
+    z_star <- pmax(x_star, y_star)    # compute z = max(x, y)
+    u_star <- 1*(x_star >= y_star)    # compute u = I(x >= y)
+    lambda_star <- EM(z_star, u_star, lambda_hat, itermax, tol)$lambda  # get estimate
+    lambda_list[i,] <- lambda_star                                      # add estimate
   }
-  sigma_hat <- apply(lambda_list, 2, sd)
-  mu_hat <- apply(lambda_list, 2, mean)
-  bias <- mu_hat - lambda_hat
-  rho_hat <- cor(lambda_list[, 1], lambda_list[, 2])
+  sigma_hat <- apply(lambda_list, 2, sd)              # compute sample standard deviation
+  mu_hat <- apply(lambda_list, 2, mean)               # compute sample mean
+  bias <- mu_hat - lambda_hat                         # compute the bias
+  rho_hat <- cor(lambda_list[, 1], lambda_list[, 2])  # compute the sample correlation
   list(sample_sd = sigma_hat, bias = bias, sample_cor = rho_hat)
 }
 ```
 
+We get the following estimates of $\SD[\hat\lambda_0], \SD[\hat\lambda_1], \Bias[\hat\lambda_0], \Bias[\hat\lambda_1]$ and $\Corr[\hat\lambda_0,\hat\lambda_1]$.
 
-```{r}
+```{r compute-param-boot}
 set.seed(93)
 result <- param_boot(EM_result$lambda)
 result
 ```
 
+The standard deviations are of order $10^{-1}$, giving us a fair confidence in the estimated parameters.
+The estimated correlation is very weak, practically speaking it is zero, which is expected as there is no reason for the parameters to be related in any way, as all the computations of the two values are done separately.
+However, we notice that there is a small positive bias, which means that the ML estimators are larger than their expected values.
+As we are interested in the true values of the parameters $\lambda_0$ and $\lambda_1$, we would prefer to go for a bias-corrected estimate.
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
