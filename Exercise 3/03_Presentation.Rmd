@@ -1,0 +1,278 @@
+---
+title: "Presentation of Exercise 3.A.1."
+author: "Mads Adrian Simonsen, William Scott Grundeland Olsen"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: beamer_presentation
+---
+
+```{r setup, include=FALSE}
+library(rmarkdown)  # Dynamic Documents for R
+library(knitr)  # A General-Purpose Package for Dynamic Report Generation in R
+knitr::opts_chunk$set(
+  echo = TRUE, tidy = FALSE, message = FALSE, warning = FALSE, strip.white = TRUE,
+  prompt = FALSE, cache = TRUE, size = "scriptsize", fig.width = 6, fig.height = 4
+)
+knitr::opts_knit$set(root.dir = "./Additional files")  # Changed working directory
+```
+
+## The Problem
+
+Use the residual resampling bootstrap method to evaluate the relative performance of the two parameter estimators $\hat{\boldsymbol{\beta}}_\text{LS}$ and $\hat{\boldsymbol{\beta}}_\text{LA}$, arising from minimizing
+$$
+  Q_\text{LS}(\mathbf{x}) = \sum_{t=3}^T (x_t - \beta_1 x_{t-1} - \beta_2 x_{t-2})^2,
+$$
+and
+$$
+  Q_\text{LA}(\mathbf{x}) = \sum_{t=3}^T |x_t - \beta_1 x_{t-1} - \beta_2 x_{t-2}|,
+$$
+respectively. Specifically, estimate the variance and bias of the two estimators. Is the LS estimator optimal for the AR(2) process?
+
+
+
+## The Time Series and the Model
+
+Assume an \textcolor{red}{AR(2) model}
+$$
+  x_t = \beta_1 x_{t-1} + \beta_2 x_{t-2} + e_t,
+$$
+where $e_t \overset{\text{i.i.d.}}{\sim} (0, \sigma^2)$, for $t=3,\dots,T$.
+
+```{r pressure, echo=FALSE}
+source("probAdata.R")  # Data
+source("probAhelp.R")  # Code
+
+x <- data3A$x
+TT <- length(x)
+plot(1:TT, x, xlab = "t", ylab = "x")
+```
+
+
+
+## Bootstrapping
+
+```{r AR(2), echo = FALSE}
+
+library(matrixStats)
+
+# Estimates for the betas:
+betas <- ARp.beta.est(x, 2)
+# Corresponding residuals:
+res_LS <- ARp.resid(x, betas$LS)
+res_LA <- ARp.resid(x, betas$LA)
+
+# Bootstrap:
+B <- 2000   # Number of bootstrap samples
+n <- length(res_LS)   # = length(res_LA) is the size of resampling
+# Initialize to store samples:
+boot_beta_LS <- matrix(NA, nrow = 2, ncol = B)
+boot_beta_LA <- matrix(NA, nrow = 2, ncol = B)
+boot_res_LS <- matrix(NA, nrow = n, ncol = B)
+boot_res_LA <- matrix(NA, nrow = n, ncol = B)
+
+for(b in 1:B) {
+  # Sample the residuals:
+  sample_LS <- sample(res_LS, n, replace = TRUE)
+  sample_LA <- sample(res_LA, n, replace = TRUE)
+  # Calculate AR(2) sequence and betas:
+  x_LS <- ARp.filter(x[rep(sample(99, 1), 2) + c(0, 1)], betas$LS, sample_LS)
+  x_LA <- ARp.filter(x[rep(sample(99, 1), 2) + c(0, 1)], betas$LA, sample_LA)
+  beta_boot_LS <- ARp.beta.est(x_LS, 2)$LS
+  beta_boot_LA <- ARp.beta.est(x_LA, 2)$LA
+  # Append betas to the bootstrap matrices:
+  boot_beta_LS[, b] <- beta_boot_LS
+  boot_beta_LA[, b] <- beta_boot_LA
+  # Append residuals (for use in Subproblem 2):
+  boot_res_LS[, b] <- ARp.resid(x_LS, beta_boot_LS)
+  boot_res_LA[, b] <- ARp.resid(x_LA, beta_boot_LA)
+}
+
+```
+
+\begin{itemize}
+  \item Use \texttt{ARp.beta.est} to calculate the estimated betas.
+\end{itemize}
+
+
+## Bootstrapping
+
+\begin{itemize}
+  \item Use \texttt{ARp.beta.est} to calculate the estimated betas.
+  \item Use \texttt{ARp.resid} to find the corresponding residuals.
+\end{itemize}
+
+
+## Bootstrapping
+
+\begin{itemize}
+  \item Use \texttt{ARp.beta.est} to calculate the estimated betas.
+  \item Use \texttt{ARp.resid} to find the corresponding residuals.
+  \item Initialize matrices to store the bootstrap samples.
+\end{itemize}
+
+
+
+
+## Bootstrapping
+
+\begin{itemize}
+  \item Use \texttt{ARp.beta.est} to calculate the estimated betas.
+  \item Use \texttt{ARp.resid} to find the corresponding residuals.
+  \item Initialize matrices to store the bootstrap samples.
+  \item Run the bootstrapping $B$ times.
+\end{itemize}
+
+
+
+
+## Bootstrapping
+
+\begin{itemize}
+  \item Use \texttt{ARp.beta.est} to calculate the estimated betas.
+  \item Use \texttt{ARp.resid} to find the corresponding residuals.
+  \item Initialize matrices to store the bootstrap samples.
+  \item Run the bootstrapping $B$ times.
+  \begin{itemize}
+    \item Sample from the calculated residuals with replacement.
+  \end{itemize}
+\end{itemize}
+
+
+
+
+## Bootstrapping
+
+\begin{itemize}
+  \item Use \texttt{ARp.beta.est} to calculate the estimated betas.
+  \item Use \texttt{ARp.resid} to find the corresponding residuals.
+  \item Initialize matrices to store the bootstrap samples.
+  \item Run the bootstrapping $B$ times.
+  \begin{itemize}
+    \item Sample from the calculated residuals with replacement.
+    \item Calculate the AR(2) sequence where the initial values are chosen at random, using \texttt{ARp.filter}.
+  \end{itemize}
+\end{itemize}
+
+
+
+
+## Bootstrapping
+
+\begin{itemize}
+  \item Use \texttt{ARp.beta.est} to calculate the estimated betas.
+  \item Use \texttt{ARp.resid} to find the corresponding residuals.
+  \item Initialize matrices to store the bootstrap samples.
+  \item Run the bootstrapping $B$ times.
+  \begin{itemize}
+    \item Sample from the calculated residuals with replacement.
+    \item Calculate the AR(2) sequence where the initial values are chosen at random, using \texttt{ARp.filter}.
+    \item Using again \texttt{ARp.beta.est}, calculate the estimated betas, and add them to the previously mentioned matrix.
+  \end{itemize}
+\end{itemize}
+
+
+
+
+## Bootstrapping
+
+\begin{itemize}
+  \item Use \texttt{ARp.beta.est} to calculate the estimated betas.
+  \item Use \texttt{ARp.resid} to find the corresponding residuals.
+  \item Initialize matrices to store the bootstrap samples.
+  \item Run the bootstrapping $B$ times.
+  \begin{itemize}
+    \item Sample from the calculated residuals with replacement.
+    \item Calculate the AR(2) sequence where the initial values are chosen at random, using \texttt{ARp.filter}.
+    \item Using again \texttt{ARp.beta.est}, calculate the estimated betas, and add them to the previously mentioned matrix.
+  \end{itemize}
+  \item Do inference on the betas obtained.
+\end{itemize}
+
+
+
+## Results
+Using the package `matrixStats` we can find the row-wise variance, and bias.
+
+### For the LS estimator
+The \textcolor{red}{variance} is
+```{r AR(2) results 1, echo=FALSE}
+
+rowVars(boot_beta_LS)
+
+```
+The \textcolor{red}{bias} is
+```{r AR(2) results 2, echo=FALSE}
+
+rowMeans(boot_beta_LS) - betas$LS
+
+```
+
+### For the LA estimator
+The \textcolor{red}{variance} is
+```{r AR(2) results 3, echo=FALSE}
+
+rowVars(boot_beta_LA)
+
+```
+The \textcolor{red}{bias} is
+```{r AR(2) results 4, echo=FALSE}
+
+rowMeans(boot_beta_LA) - betas$LA
+
+```
+
+
+
+## Conclusion
+The estimated variance of $\hat{\boldsymbol{\beta}}_\text{LA}$ is \textcolor{red}{smaller} than that of $\hat{\boldsymbol{\beta}}_\text{LS}$, and this is also true for the estimated bias. This suggests that the LS estimator is \textcolor{red}{not optimal} for the $\text{AR}(2)$ process.
+
+
+## Appendix -- Code Part 1
+
+<!--
+Note: Not to be shown during the presentation, but if there are any questions, this might help answering them.
+-->
+
+The initialization:
+
+```{r AR(2) init, eval = FALSE}
+
+library(matrixStats)
+
+# Estimates for the betas:
+betas <- ARp.beta.est(x, 2)
+# Corresponding residuals:
+res_LS <- ARp.resid(x, betas$LS)
+res_LA <- ARp.resid(x, betas$LA)
+
+# Bootstrap:
+B <- 2000   # Number of bootstrap samples
+n <- length(res_LS)   # The size of resampling
+# Initialize to store samples:
+boot_beta_LS <- matrix(NA, nrow = 2, ncol = B)
+boot_beta_LA <- matrix(NA, nrow = 2, ncol = B)
+
+```
+
+
+## Appendix -- Code Part 2
+
+The bootstrap run:
+
+```{r AR(2) boot, eval = FALSE}
+
+for(b in 1:B) {
+  # Sample the residuals:
+  sample_LS <- sample(res_LS, n, replace = TRUE)
+  sample_LA <- sample(res_LA, n, replace = TRUE)
+  # Calculate AR(2) sequence:
+  # rep(., 2) replicates value from sample to a 2-vector
+  x_LS <- ARp.filter(x[rep(sample(TT-1, 1), 2)+c(0, 1)],
+                     betas$LS, sample_LS)
+  x_LA <- ARp.filter(x[rep(sample(TT-1, 1), 2)+c(0, 1)],
+                     betas$LA, sample_LA)
+  # Append betas to the bootstrap matrices:
+  boot_beta_LS[, b] <- ARp.beta.est(x_LS, 2)$LS
+  boot_beta_LA[, b] <- ARp.beta.est(x_LA, 2)$LA
+}
+
+```
