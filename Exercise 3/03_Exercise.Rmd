@@ -4,12 +4,15 @@ author: "Mads Adrian Simonsen, William Scott Grundeland Olsen"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 header-includes:
   - \usepackage[ruled,vlined,linesnumbered]{algorithm2e}
+  - \usepackage{booktabs}
 output:
   pdf_document: default
   github_document: default
   html_document:
     df_print: paged
 subtitle: TMA4300 Computer Intensive Statistical Models
+urlcolor: blue
+bibliography: ref.bib
 ---
 
 ```{r setup, include=FALSE}
@@ -44,11 +47,13 @@ knitr::opts_knit$set(root.dir = "./Additional files")  # Changed working directo
 \newcommand{\argmin}{\operatorname*{arg\,min}}
 \newcommand{\argmax}{\operatorname*{arg\,max}}
 \newcommand{\bfy}{\mathbf{y}}
+\newcommand{\bfx}{\mathbf{x}}
 \newcommand{\bff}{\mathbf{f}}
 \newcommand{\bfzero}{\mathbf{0}}
 \newcommand{\bfz}{\mathbf{z}}
 \newcommand{\bfu}{\mathbf{u}}
 \newcommand{\bfeta}{\boldsymbol{\eta}}
+\newcommand{\bfbeta}{\boldsymbol{\beta}}
 \newcommand{\dtheta}{\, \mathrm{d} \theta}
 \newcommand{\dx}{\, \mathrm{d} x}
 \newcommand{\dy}{\, \mathrm{d} y}
@@ -58,22 +63,132 @@ knitr::opts_knit$set(root.dir = "./Additional files")  # Changed working directo
 \newcommand{\matr}[1]{\ensuremath{\boldsymbol{\mathbf{#1}}}}  <!-- matrix -->
 
 
+
 ```{r libraries and help files, eval = TRUE, echo = FALSE}
 library(tidyverse)  # Collection of R packages designed for data science
+library(matrixStats)  # For row- and column-wise variance and mean of matrices
+
 
 # Extract pre-programmed R-code
-source("probAdata.R")  # Code
-source("probAhelp.R")  # Data
+source("probAdata.R")  # Data
+source("probAhelp.R")  # Code
 ```
 
 # Problem A: Comparing AR(2) parameter estimators using resampling of residuals
 
+We consider here the $\mathrm{AR}(2)$ model specified by the relation
+$$
+  x_t = \beta_1 x_{t-1} + \beta_2 x_{t-2} + e_t,
+$$
+where $e_t$ are i.i.d. random variables with zero mean and unit variance, for $t=3, \dots, T$. In our case we analyze the data in `data3A$x`, which is of length $T=100$, and has the form as in Figure \ref{fig:time_series}.
+```{r Time series, fig.width = 5, fig.height = 3, fig.cap="\\label{fig:time_series}Time seres data."}
+
+x <- data3A$x
+TT <- length(x)
+plot(1:TT, x, xlab = "t", ylab = "x")
+
+```
+
+The minimizers $\hat{\bfbeta}_\mathrm{LS}$ and $\hat{\bfbeta}_\mathrm{LA}$ are obtained by minimizing
+$$
+  Q_\mathrm{LS}(\bfx) = \sum_{t=3}^T (x_t - \beta_1 x_{t-1} - \beta_2 x_{t-2})^2
+  \quad \text{and} \quad
+  Q_\mathrm{LA}(\bfx) = \sum_{t=3}^T |x_t - \beta_1 x_{t-1} - \beta_2 x_{t-2}|,
+$$
+with respect to $\bfbeta = \begin{bmatrix} \beta_1 & \beta_2 \end{bmatrix}^\top$, respectively. We can then define the estimated residuals $\hat{e}_t = x_t - \hat{\beta}_1 x_{t-1} + \hat{\beta}_2 x_{t-2}$, for $t=3,\dots,T$, and if we let $\bar{e}$ be the mean of these, $\hat{\varepsilon}_t = \hat{e}_t - \bar e$ has mean zero.
+
 ## Subproblem 1.
+In the following code block we generate $B=2000$ bootstrap samples of the residuals, containing $T$ elements randomly sampled from the estimated residuals with replacement. From the sampled residuals the $\mathrm{AR}(2)$ sequence is resampled for each $b = 1, \dots, B$, where the initial values $x_\tau$ and $x_{\tau+1}$ are chosen randomly for each new process.
+
+```{r AR(2)}
+
+# Estimates for the betas:
+betas <- ARp.beta.est(x, 2)
+# Corresponding residuals:
+res_LS <- ARp.resid(x, betas$LS)
+res_LA <- ARp.resid(x, betas$LA)
+
+# Bootstrap:
+B <- 2000   # Number of bootstrap samples
+n <- length(res_LS)   # = length(res_LA) is the size of resampling
+# Initialize to store samples:
+boot_beta_LS <- matrix(NA, nrow = 2, ncol = B)
+boot_beta_LA <- matrix(NA, nrow = 2, ncol = B)
+boot_res_LS <- matrix(NA, nrow = n, ncol = B)
+boot_res_LA <- matrix(NA, nrow = n, ncol = B)
+
+for(b in 1:B) {
+  # Sample the residuals:
+  sample_LS <- sample(res_LS, n, replace = TRUE)
+  sample_LA <- sample(res_LA, n, replace = TRUE)
+  # Calculate AR(2) sequence and betas:
+  x_LS <- ARp.filter(x[rep(sample(TT-1, 1), 2) + c(0, 1)], betas$LS, sample_LS)
+  x_LA <- ARp.filter(x[rep(sample(TT-1, 1), 2) + c(0, 1)], betas$LA, sample_LA)
+  beta_boot_LS <- ARp.beta.est(x_LS, 2)$LS
+  beta_boot_LA <- ARp.beta.est(x_LA, 2)$LA
+  # Append betas to the bootstrap matrices:
+  boot_beta_LS[, b] <- beta_boot_LS
+  boot_beta_LA[, b] <- beta_boot_LA
+  # Append residuals (for use in Subproblem 2):
+  boot_res_LS[, b] <- ARp.resid(x_LS, beta_boot_LS)
+  boot_res_LA[, b] <- ARp.resid(x_LA, beta_boot_LA)
+}
+
+```
+
+We can then find the estimated variances of $\hat{\bfbeta}_\mathrm{LS}$ and $\hat{\bfbeta}_\mathrm{LA}$, and also their bias. The results are shown in the following code block.
+
+```{r AR(2) results}
+
+# Estimated variances of beta1 and beta2 for LS and LA:
+rowVars(boot_beta_LS)
+rowVars(boot_beta_LA)
+
+# Estimated bias of beta1 and beta2 for LS and LA:
+rowMeans(boot_beta_LS) - betas$LS
+rowMeans(boot_beta_LA) - betas$LA
+
+```
+
+From this we see that the estimated variance of $\hat{\bfbeta}_\mathrm{LA}$ is smaller than that of $\hat{\bfbeta}_\mathrm{LS}$, and this is also true for the estimated bias. This suggests that the LS estimator is not optimal for the $\mathrm{AR}(2)$ process.
+
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 2.
+In this part we want to compute a 95% prediction interval for $x_{101}$ based on the LS and the LA estimators, using the bootstrapped time series and parameter estimates obtained earlier. For this we use `boot_res_LS` and `boot_res_LA`, as we found in the last part. Using this we can simulate
+$$
+  x_{101} = \hat{\beta}_1 x_{100} + \hat{\beta}_2 x_{99} + \hat{\varepsilon}_{101},
+$$
+where $\hat{\bfbeta}$ is either $\hat{\bfbeta}_\mathrm{LS}$ or $\hat{\bfbeta}_\mathrm{LA}$, and $\hat{\varepsilon}_{101}$ is sampled at random from the residual sample. We can use the residuals as samples for $\hat{\varepsilon}_{101}$ because they are assumed to be independent identically distributed. We do this in the following code block for the LS and the LA estimators.
+
+```{r AR(2) prediction interval}
+
+# Finding x_101 for the two estimators:
+x_101_LS <- boot_beta_LS[1, ] * x[TT] + boot_beta_LS[2, ] * x[TT-1] +
+            sample(boot_res_LS, B, replace = TRUE)
+x_101_LA <- boot_beta_LA[1, ] * x[TT] + boot_beta_LA[2, ] * x[TT-1] +
+            sample(boot_res_LA, B, replace = TRUE)
+
+# The prediction intervals for x_101 for LS and LA:
+c(quantile(x_101_LS, 0.025), quantile(x_101_LS, 0.975))
+c(quantile(x_101_LA, 0.025), quantile(x_101_LA, 0.975))
+
+```
+
+We see that the 95% prediction interval for $x_{101}$ using the LS estimator is a little wider than using the LA estimator. The prediction interval using the LS estimator is shown in red in Figure \ref{fig:prediction_intervals}, while the prediction interval using the LA estimator is shown in blue in the same figure. From this we see that it is reasonable that these are reasonable values for the 95% prediction intervals for $x_{101}$.
+
+```{r Time series with prediction intervals, fig.cap="\\label{fig:prediction_intervals}Time seres data with the 95% prediction intervals for $x_{101}$ using the LS estimator in red and using the LA estimator in blue."}
+
+plot(1:TT, x, xlab = "t", ylab = "x")
+abline(h = quantile(x_101_LS, 0.025), col = "red")
+abline(h = quantile(x_101_LS, 0.975), col = "red")
+abline(h = quantile(x_101_LA, 0.025), col = "blue")
+abline(h = quantile(x_101_LA, 0.975), col = "blue")
+
+```
+
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
@@ -81,16 +196,105 @@ source("probAhelp.R")  # Data
 
 # Problem B: Permutation test
 
+[Bilirubin](http://en.wikipedia.org/wiki/Bilirubin) is a breakdown product of hemoglobin, which is a principal component of red blood cells. If the liver has suffered degeneration,  the decomposition of hemoglobin is elevated, or the gall bladder has been destroyed, large amounts of bilirubin can accumulate in the blood, leading to jaundice, which is a yellowish or greenish pigmentation in the skin.
+
+We will look at a data set taken from [@jorgensen1993theory]. It contains measurements of the concentration of bilirubin (mg/dL) in blood samples taken from an three young men, shown in Table \ref{tab:bilirubin}.
+
+```{r bilirubin, echo = FALSE}
+bilirubin <- read.table("bilirubin.txt", header = TRUE)
+bilirubin %>%
+  group_by(pers) %>% 
+  mutate(row = row_number()) %>% 
+  pivot_wider(names_from = pers, values_from = meas) %>% 
+  select(-row) %>%
+  set_names(1:3) %>% 
+  t() %>% 
+  kableExtra::kbl(booktabs = TRUE, format = "latex", row.names = TRUE,
+                  caption = "The measurements of bilirubin in three individuals.") %>% 
+  kableExtra::kable_styling() %>% 
+  kableExtra::add_header_above(c("Individual", "Concentration (mg/dL)" = 11))
+```
+
+We will use the $F$-statistic perform a permutation test.
+
 ## Subproblem 1.
+
+We set up the following regression model
+\begin{equation}\label{eq:B-lm}
+\log Y_{ij} = \beta_i + \epsilon_{ij},\quad \text{with}\quad i=1,2,3,\quad \text{and} j = 1,\ldots, n_i,
+\end{equation}
+where $n_i$ are the number of measurements from individual $i$, and $\epsilon_{ij}\sim\Normal(0,\sigma^2)$.
+We want to test if the concentration of bilirubin of the three young men are significantly different, so we set up the following hypothesis test
+$$
+  H_0 : \beta_1=\beta_2=\beta_3\quad\text{against}\quad H_1 : \exists i,j \in\{1,2,3\} : \beta_i\neq\beta_j.
+$$
+
+A boxplot of the log measurements for each individual is shown in Figure \ref{fig:B-bilirubin-box}, where we see that individual 1 and individual 2 have similar mean measurements, albeit having different spread. Individual 3 stands out from the two others.
+
+```{r bilirubin fit, fig.width=4, fig.height=3, fig.align='center', fig.cap="\\label{fig:B-bilirubin-box}Box plot showing the log concentration of biliburin from the three young men."}
+bilirubin %>% 
+  ggplot(aes(pers, log(meas))) +
+  geom_boxplot() +
+  theme_minimal()
+
+(lm_fit_summary <- summary(lm(log(meas) ~ pers, bilirubin)))
+Fval <- lm_fit_summary$fstatistic[1]
+```
+
+The summary output shows the $F$-statistic on 2 and 26 degrees of freedom with the respective $p$-value of `r lm_fit_summary$fstatistic[2]``. With a significance level of $5\%$, we reject the null hypothesis and say there is evidence of the individuals having different concentrations of bilirubin.
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 2.
 
+We create a permutation test function, where we shuffle the individual labels to the data and re-fit a linear model according to \eqref{eq:B-lm} and return the $F$-statistic.
+
+```{r perm}
+# Generates permutation of the data, fitting a linear model and returning the F statistic
+# data: dataframe consisting of two variables, response and covariate
+permTest <- function(data) {
+  # gives formula log(y) ~ x, where y is reshuffled
+  perm_formula <- update(formula(data), sample(log(.)) ~ .)
+  # returns F statistic
+  summary(lm(perm_formula, data))$fstatistic[1]
+}
+```
+
+
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 3.
+We now perform the permutation test with a sample size of 999.
+A histogram of the $F$-statistics is shown in Figure \ref{fig:B-F-hist}. We see it fits well under the curve of the theoretical density of the $F$ distribution.
+
+```{r testing perm, fig.width=5, fig.height=3, fig.align='center', fig.cap="\\label{fig:B-F-hist}Normalized histogram of F-statistic from 999 permutations of the \\texttt{bilirubin.txt} data together with the theoretical $F$ distribution on 2 and 26 degrees of freedom. The vertical line is the $F$-statistic of the original model."}
+set.seed(42)
+Fvals <- replicate(n = 999, permTest(bilirubin))
+
+tibble(Fvals = Fvals, Fval = Fval) %>% 
+  ggplot(aes(Fvals)) +
+  geom_histogram(
+    mapping = aes(y = after_stat(density)),
+    breaks  = seq(0, max(Fvals), by=0.2)
+    ) +
+  geom_function(
+    mapping = aes(color = "Theoretical density"),
+    fun     = df,
+    n       = 1001,
+    args    = list(df1 = 2, df2 = 26)
+  ) +
+  geom_vline(aes(xintercept = Fval, color = "F-value")) +
+  theme_minimal()
+```
+
+The calculated $p$-value from the permutation test is given below.
+```{r testing perm p-val}
+p_val <- mean(Fvals > Fval)
+print(sprintf("p-value =  %.5f", p_val))
+```
+
+This value corresponds well with the $p$-value from the summary output of the original model. Again, with a significance level of $5\%$ we reject the null hypothesis and say there is evidence of the three young men having different levels of bilirubin.
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 [//]: # ----------------------------------------------------------------------------------------------------------------
@@ -449,3 +653,5 @@ There are some advantages in optimizing the likelihood directly compared to usin
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 [//]: # ----------------------------------------------------------------------------------------------------------------
+
+# References
