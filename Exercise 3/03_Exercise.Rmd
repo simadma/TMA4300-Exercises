@@ -3,6 +3,7 @@ title: "Exercise 3"
 author: "Mads Adrian Simonsen, William Scott Grundeland Olsen"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 header-includes:
+  - \usepackage[ruled,vlined,linesnumbered]{algorithm2e}
   - \usepackage{booktabs}
 output:
   pdf_document: default
@@ -49,11 +50,17 @@ knitr::opts_knit$set(root.dir = "./Additional files")  # Changed working directo
 \newcommand{\bfx}{\mathbf{x}}
 \newcommand{\bff}{\mathbf{f}}
 \newcommand{\bfzero}{\mathbf{0}}
+\newcommand{\bfz}{\mathbf{z}}
+\newcommand{\bfu}{\mathbf{u}}
 \newcommand{\bfeta}{\boldsymbol{\eta}}
 \newcommand{\bfbeta}{\boldsymbol{\beta}}
 \newcommand{\dtheta}{\, \mathrm{d} \theta}
+\newcommand{\dx}{\, \mathrm{d} x}
+\newcommand{\dy}{\, \mathrm{d} y}
 \newcommand{\RR}{\mathbb{R}}
 \newcommand{\e}{\mathrm{e}}
+\newcommand{\vect}[1]{\ensuremath{\boldsymbol{\mathbf{#1}}}}  <!-- vector -->
+\newcommand{\matr}[1]{\ensuremath{\boldsymbol{\mathbf{#1}}}}  <!-- matrix -->
 
 
 
@@ -294,20 +301,355 @@ This value corresponds well with the $p$-value from the summary output of the or
 
 # Problem C: The EM-algorithm and bootstrapping
 
-## Subproblem 1.
+Let $x_1,\ldots, x_n$ and $y_1,\ldots, y_n$ be independent random variables, with $x_i\sim\Exp(\lambda_0)$ and $y_i\sim\Exp(\lambda_1)$, for $i=1,\ldots n$.
+Assume that we do not observe $(x_i, y_i), i=1,\ldots,n$, directly.
+Instead, we observe
+\begin{equation}\label{eq:c-observed}
+  \begin{split}
+    z_i &= \max(x_i, y_i),\quad \text{for}\quad i=1,\ldots, n, \\
+    u_i &= I(x_i \geq y_i),\quad \text{for}\quad i=1,\ldots, n,
+  \end{split}
+\end{equation}
 
+where $I(\cdot)\in\{0, 1\}$ is the indicator function. A histogram of the observed data is shown in Figure \ref{fig:em-observed}.
+
+Based on the observed values $(z_i, u_i), i=1,\ldots,n$, we will use the EM-algorithm to find the MLE for $(\lambda_0, \lambda_1)$.
+
+```{r em-observed, echo = FALSE, fig.align='center', fig.width=5, fig.height=3, fig.cap="The observed data"}
+## Read observed data
+z <- scan("z.txt")  # max(x, y)
+u <- scan("u.txt")  # I(x >= y)
+
+tibble(z = z, u = factor(u)) %>% ggplot(aes(x = z, fill = u)) +
+  geom_histogram(position = "identity", alpha = 0.5, bins = 50) +
+  labs(fill = expression(u==I(x >= y)), x = "z = max(x, y)") +
+  theme_minimal()
+```
+
+
+## Subproblem 1.
+Let $\vect x = (x_1,\ldots,x_n), \vect y = (y_1,\ldots, y_n), \vect z = (z_1, \ldots, z_n)$ and $\vect u = (u_1,\ldots, u_n)$.
+For the E-step we compute the expectation of the joint log likelihood for the complete data conditioned on the observed data.
+$$
+\begin{split}
+ Q(\lambda_0, \lambda_1\mid \lambda_0^{(t)},\lambda_1^{(t)}) &= \E\left[\log \mathcal L(\lambda_0,\lambda_1\mid \vect X, \vect Y) \mid \vect z, \vect u, \lambda_0^{(t)}, \lambda_1^{(t)}\right] \\
+ &= \E\left[\log f(\vect X, \vect Y\mid \lambda_0, \lambda_1)\mid \vect z, \vect u, \lambda_0^{(t)}, \lambda_1^{(t)}\right] \\
+ &= \E\left[\log\left(\prod_{i=1}^n f_X(X_i\mid\lambda_0)\cdot f_Y(Y_i\mid\lambda_1)\right)\mid \vect z, \vect u, \lambda_0^{(t)}, \lambda_1^{(t)}\right] \\
+ &= \E\left[\sum_{i=1}^n\log\left(\lambda_0\e^{-\lambda_0X_i}\cdot\lambda_1\e^{-\lambda_1Y_i}\right)\mid \vect z, \vect u, \lambda_0^{(t)}, \lambda_1^{(t)}\right] \\
+ &= \E\left[\sum_{i=1}^n\left(\log \lambda_0 + \log \lambda_1 - \lambda_0X_i - \lambda_1Y_i\right)\mid \vect z, \vect u, \lambda_0^{(t)}, \lambda_1^{(t)}\right] \\\\
+ &= n(\log\lambda_0 + \log \lambda_1) \\
+ &\quad -\lambda_0\sum_{i=1}^n\E\left[X_i\mid\vect z,\vect u, \lambda_0^{(t)},\lambda_1^{(t)}\right] \\
+ &\quad - \lambda_1\sum_{i=1}^n\E\left[Y_i\mid\vect z,\vect u, \lambda_0^{(t)},\lambda_1^{(t)}\right].
+\end{split}
+$$
+To evaluate the expectations in the last equality, we first do some simplifications.
+For $X_i,i=1,\ldots, n$, we have the following:
+\begin{equation}\label{eq:c-e-x}
+\begin{split}
+  \E\left[X_i\mid \vect z,\vect u, \lambda_0^{(t)},\lambda_1^{(t)} \right]
+  &=\E\left[X_i\mid \max(X_i, Y_i) = z_i, I(X_i\geq Y_i) = u_i, \lambda_0 = \lambda_0^{(t)},\lambda_1 = \lambda_1^{(t)}\right] \\
+  &=u_i\E\left[X_i\mid\max(X_i,Y_i) = z_i, X_i\geq Y_i,\lambda_0 = \lambda_0^{(t)},\lambda_1 = \lambda_1^{(t)}\right] \\
+  &\quad + (1 - u_i)\E\left[X_i\mid\max(X_i,Y_i) = z_i, X_i< Y_i,\lambda_0 = \lambda_0^{(t)},\lambda_1 = \lambda_1^{(t)}\right] \\
+  &= u_i\E\left[X_i\mid X_i = z_i\right] + (1 - u_i)\E\left[X_i\mid X_i < z_i,\lambda_0 = \lambda_0^{(t)}\right] \\
+  &=u_iz_i + (1 - u_i)\E\left[X_i\mid X_i < z_i,\lambda_0 = \lambda_0^{(t)}\right].
+\end{split}
+\end{equation}
+The expectation in the last equality is found by first computing the conditional cdf of $[X\mid X < z, \lambda]$, omitting the subscripts for computational convenience, as we will use the result for $Y_i,i=1,\ldots, n$ as well.
+
+$$
+\begin{split}
+  F(x\mid X < z,\lambda) &= \Pr(X < x\mid X < z,\lambda) \\
+  &= \frac{\Pr(X < x, X < z\mid\lambda)}{\Pr(X< z\mid \lambda)} \\
+  &= \frac{F_X(\min(x, z)\mid\lambda)}{F_X(z\mid \lambda)},
+\end{split}
+$$
+where $F_X(\cdot\mid\lambda)\sim\Exp(\lambda)$.
+The conditional pdf is then given by
+$$
+f(x\mid X< z,\lambda) = \frac{d}{dx}\frac{F_X(\min(x, z)\mid\lambda)}{F_X(z\mid \lambda)} = \frac{f_X(x\mid \lambda)}{F_X(z\mid \lambda)},\quad 0<x<z,
+$$
+giving the conditional expectation
+$$
+\begin{split}
+  \E\left[X\mid X < z,\lambda\right] &= \int_0^z x f(x\mid X< z,\lambda)\,\mathrm{d}x \\
+  &= \int_0^z x \frac{f_X(x\mid \lambda)}{F_X(z\mid \lambda)}\,\mathrm{d}x \\
+  &= \int_0^z x\frac{\lambda\e^{-\lambda x}}{1 - \e^{-\lambda z}}\,\mathrm d x \\
+  &= \frac{1}{1-\e^{-\lambda x}}\int_0^z \lambda x\e^{-\lambda x}\,\mathrm d x \\
+  &= \frac{1}{1-\e^{-\lambda x}}\left(\frac{1}{\lambda}(1 - \e^{-\lambda x} - \lambda z \e^{-\lambda z})\right) \\
+  &= \frac{1}{\lambda} - \frac{z\e^{-\lambda z}}{1 - \e^{-\lambda z}} \\
+  &= \frac{1}{\lambda} - \frac{z}{\exp\{\lambda z\} - 1}. \\
+\end{split}
+$$
+Inserting this result into Expression \eqref{eq:c-e-x} yields
+\begin{equation}\label{eq:c-e-x-final}
+  \E\left[X_i\mid \vect z,\vect u, \lambda_0^{(t)},\lambda_1^{(t)} \right] = u_iz_i + (1 - u_i)\left(\frac{1}{\lambda_0^{(t)}} - \frac{z_i}{\exp\{\lambda_0^{(t)} z_i\} - 1}\right).
+\end{equation}
+
+Similarly for $Y_i,i=1,\ldots,n$, we have that
+\begin{equation}\label{eq:c-e-y-final}
+\begin{split}
+  \E\left[Y_i\mid \vect z,\vect u, \lambda_0^{(t)},\lambda_1^{(t)} \right]
+  &=\E\left[Y_i\mid \max(X_i, Y_i) = z_i, I(X_i\geq Y_i) = u_i, \lambda_0 = \lambda_0^{(t)},\lambda_1 = \lambda_1^{(t)}\right] \\
+  &=(1 - u_i)\E\left[Y_i\mid\max(X_i,Y_i) = z_i, X_i < Y_i,\lambda_0 = \lambda_0^{(t)},\lambda_1 = \lambda_1^{(t)}\right] \\
+  &\quad + u_i\E\left[X_i\mid\max(X_i,Y_i) = z_i, X_i\geq Y_i,\lambda_0 = \lambda_0^{(t)},\lambda_1 = \lambda_1^{(t)}\right] \\
+  &= (1 - u_i)\E\left[Y_i\mid Y_i = z_i\right] + u_i\E\left[Y_i\mid Y_i \leq z_i,\lambda_1 = \lambda_1^{(t)}\right] \\
+  &=(1 - u_i)z_i + u_i\left(\frac{1}{\lambda_1^{(t)}} - \frac{z_i}{\exp\{\lambda_1^{(t)}z_i\} - 1}\right).
+\end{split}
+\end{equation}
+
+Thus, by substituting Expression \eqref{eq:c-e-x-final} and \eqref{eq:c-e-y-final} into the log-likelihood for the complete data $\vect x, \vect y$, conditional on the observed data $\vect z,\vect u$, we get
+\begin{equation}\label{eq:c-log-lik}
+\begin{split}
+  Q(\lambda_0,\lambda_1\mid \lambda_0^{(t)}, \lambda_1^{(t)})
+  &= n(\log \lambda_0 + \log\lambda_1) \\
+  &\quad - \lambda_0\sum_{i=1}^n\left[u_iz_i + (1 - u_i)\left(\frac{1}{\lambda_0^{(t)}} - \frac{z_i}{\exp\{\lambda_0^{(t)} z_i\} - 1}\right)\right] \\
+  &\quad - \lambda_1\sum_{i=1}^n\left[(1 - u_i)z_i + u_i\left(\frac{1}{\lambda_1^{(t)}} - \frac{z_i}{\exp\{\lambda_1^{(t)}z_i\} - 1}\right)\right].
+\end{split}
+\end{equation}
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 2.
 
+The M-step of the EM-algorithm is to maximize $Q(\lambda_0,\lambda_1\mid\lambda_0^{(t)}, \lambda_1^{(t)})$ with respect to $(\lambda_0,\lambda_1)$, and set the $(\lambda_0^{(t+1)}, \lambda_1^{(t+1)})$ equal to the maximizer of $Q$.
+We find the maximizer by taking the partial derivatives of Expression \eqref{eq:c-log-lik}, setting them equal to zero.
+We have
+$$
+\begin{split}
+  \frac{\partial}{\partial \lambda_0} Q(\lambda_0,\lambda_1\mid\lambda_0^{(t)},\lambda_1^{(t)})
+  &= \frac{n}{\lambda_0} - \sum_{i=1}^n\left[u_iz_i + (1 - u_i)\left(\frac{1}{\lambda_0^{(t)}} - \frac{z_i}{\exp\{\lambda_0^{(t)} z_i\} - 1}\right)\right] = 0, \\
+  \frac{\partial}{\partial \lambda_1} Q(\lambda_0,\lambda_1\mid\lambda_0^{(t)},\lambda_1^{(t)})
+  &= \frac{n}{\lambda_1} - \sum_{i=1}^n\left[(1 - u_i)z_i + u_i\left(\frac{1}{\lambda_1^{(t)}} - \frac{z_i}{\exp\{\lambda_1^{(t)} z_i\} - 1}\right)\right] = 0,
+\end{split}
+$$
+which gives the maximizer
+\begin{equation}\label{eq:m-step}
+  \begin{pmatrix}\lambda_0^{(t+1)} \\[3mm] \lambda_1^{(t+1)}\end{pmatrix} =
+  \begin{pmatrix}\left.n\middle/\sum_{i=1}^n\left[u_iz_i + (1 - u_i)\left(\frac{1}{\lambda_0^{(t)}} - \frac{z_i}{\exp\{\lambda_0^{(t)} z_i\} - 1}\right)\right]\right. \\[5mm]
+  \left.n\middle/\sum_{i=1}^n\left[(1 - u_i)z_i + u_i\left(\frac{1}{\lambda_1^{(t)}} - \frac{z_i}{\exp\{\lambda_1^{(t)} z_i\} - 1}\right)\right]\right.
+  \end{pmatrix}.
+\end{equation}
+
+We then implement the EM-algorithm with the convergence criterion that
+
+$$
+  \left\|\vect \lambda^{(t + 1)} - \vect \lambda^{(t)}\right\|_2 < \epsilon = 10^{-10},\quad \vect \lambda^{(t)} = (\lambda_0^{(t)}, \lambda_1^{(t)}).
+$$
+
+```{r em-alg}
+# Computes the expectation of the log-likelihood of the complete data given the
+# observational data
+# lambda:      (lambda_0^{(t)}, lambda_1^{(t)})
+# lambda_next: (lambda_0^{(t + 1)}, lambda_1^{(t + 1)})
+# z:           observed data, max(x, y)
+# u:           observed data, I(x >= y)
+Q_func <- function(lambda, lambda_next, z, u) {
+  length(z)*(log(lambda_next[1]) + log(lambda_next[2])) -
+    lambda_next[1]*sum(u*z + (1 - u)*(1/lambda[1] - z/(exp(lambda[1]*z) - 1))) -
+    lambda_next[2]*sum((1 - u)*z + u*(1/lambda[2] - z/(exp(lambda[2]*z) - 1)))
+}
+
+# Computes the MLE of lambda_0 and lambda_1 given the observed data using the EM-algorithm
+# Additionally, it returns the list of recorded log-likelihood values from the iterations
+# z:       observed data, max(x, y)
+# u:       observed data, I(x >= y)
+# lambda:  starting values (lambda_0^{(0)}, lambda_1^{(0)})
+# itermax: maximum number of iterations
+# tol:     convergence tolerance value 
+EM <- function(z, u, lambda, itermax = 300, tol = 1e-10) {
+  lambda_next <- numeric(2)
+  log_liks <- numeric(0)
+  for (i in 1:itermax) {
+    # update (lambda_0^{(t + 1)}, lambda_1^{(t + 1)})
+    lambda_next[1] <- 1 / mean(u*z + (1 - u)*(1/lambda[1] - z/(exp(lambda[1]*z) - 1)))
+    lambda_next[2] <- 1 / mean((1 - u)*z + u*(1/lambda[2] - z/(exp(lambda[2]*z) - 1)))
+    log_liks <- c(log_liks, Q_func(lambda, lambda_next, z, u))  # add Q-value
+    # check convergence
+    if(norm(lambda_next - lambda, type = "2") < tol) {
+      break
+    }
+    lambda <- lambda_next  # update (lambda_0^{(t)}, lambda_1^{(t)})
+  }
+  list(lambda = lambda_next, log_liks = log_liks)
+}
+```
+Looking at Figure \ref{fig:em-observed}, we can make an initial guess for the rate parameters.
+Since we only see the maximum of $x$ and $y$, we expect that $\E[X] < \E[Z\mid U=1]$ and $\E[Y]< \E[Z\mid U=0]$.
+
+```{r mean-observed}
+cat(sprintf("mean of z given u = 1: %.1f\nmean of z given u = 0: %.1f",
+            mean(z[u == 1]), mean(z[u == 0])))
+```
+We then use the starting values $(\lambda_0^{(0)}, \lambda_1^{(0)}) = (1/0.4, 1/0.2) = (2.5, 5)$, expecting the final estimates $(\hat\lambda_0,\hat\lambda_1)$ to be larger.
+
+```{r}
+EM_result <- EM(z, u, c(2.5, 5), tol = 1e-10)
+cat(sprintf("Estimate of lambda_%d: %.2f\n", 0:1, EM_result$lambda))
+```
+
+We get the estimates
+$$
+ (\hat\lambda_0, \hat\lambda_1) = (3.47, 9.35),
+$$
+which is higher than the initial values as expected.
+
+A convergence plot of the $Q(\cdot)$-function is seen in Figure \ref{fig:em-convergence}.
+We see that it converges very fast.
+After 6 iterations, it stabilizes, while making small adjustments as we had set a quite strict convergence criterion.
+
+```{r em-convergence, fig.align='center', fig.width=5, fig.height=3, fig.cap="Convergence plot of estimated expectation of the joint log likelihood for the complete data conditional on the observed data."}
+tibble(index = 1:length(EM_result$log_liks), log_liks = EM_result$log_liks) %>%
+  ggplot(aes(index, log_liks)) +
+  geom_point() +
+  labs(x = "iteration", y = expression(Q(lambda^{t+1}*"|"*lambda^t))) +
+  theme_minimal()
+```
+
+
+
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 3.
 
+To get an idea of the biasedness and confidence in the estimated values, we perform a parametric bootstrap.
+The procedure is shown in Algorithm \ref{alg:c-bootstrap}.
+
+\begin{algorithm}[H]\label{alg:c-bootstrap}
+\SetAlgoLined
+\KwResult{Standard deviations, biases and correlation of $\hat\lambda_0,\hat\lambda_1$}
+  set $(\lambda_0^{(0)},\lambda_1^{(0)})\leftarrow(\hat\lambda_0,\hat\lambda_1)$\;
+  set $n\leftarrow200$\;
+  initialize $\vect\lambda$-List of length $B$\;
+  \For{$i\leftarrow 1$ \KwTo $B$}{
+    Draw $x_1^*, \ldots, x_n^*\sim\Exp(\hat\lambda_0)$\;
+    Draw $y_1^*, \ldots, y_n^*\sim\Exp(\hat\lambda_1)$\;
+    initialize $n$-vectors $\vect z^*$ and $\vect u^*$\;
+    \For{$j\leftarrow 1$ \KwTo $n$}{
+      $z_j^*\leftarrow \max(x_j^*, y_j^*)$\;
+      $u_j^*\leftarrow I(x_j^*\geq y_j^*)$\;
+    }
+    $(\hat\lambda_0^*, \hat\lambda_1^*)\leftarrow$ EM-algorithm$\left(\vect z^*,\vect u^*, (\lambda_0^{(0)}, \lambda_1^{(0)})\right)$\;
+    $\vect \lambda$-list[$i$]$\leftarrow(\hat\lambda_0^*, \hat\lambda_1^*)$\;
+  }
+  Compute sample standard deviation $(\hat\sigma_{\lambda_0},\hat\sigma_{\lambda_1})$ from $\vect\lambda$-list\;
+  Compute sample mean $(\hat\mu_{\lambda_0},\hat\mu_{\lambda_1})$ from $\vect\lambda$-list\;
+  bias$_{(\hat\lambda_0,\hat\lambda_1)}\leftarrow (\hat\mu_{\lambda_0},\hat\mu_{\lambda_1}) - (\hat\lambda_0,\hat\lambda_1)$\;
+  Compute sample correlation $\hat\rho$ from $\vect\lambda$-list\;
+ \caption{Parametric bootstrapping for inference of $(\hat\lambda_0,\hat\lambda_1)$}
+\end{algorithm}
+
+We implement this algorithm below.
+
+```{r param-bootstrap}
+# performs a parametric bootstrap of the estimated parameters, and returns an estimate of
+# the standard deviation, bias, and correlation of (hat_lambda_0, hat_lambda_1)
+# lamba_hat: estimated parameters from the EM-algorithm
+# B:         number of bootstrap samples
+# itermax:   maximum iterations in the EM-algorithm
+# tol:       convergence tolerance in the EM-algorithm
+param_boot <- function(lambda_hat, B = 10000, itermax = 300, tol = 1e-5) {
+  n <- 200  # number of observations
+  lambda_list <- matrix(numeric(2*B), nrow = B)
+  for (i in 1:B) {
+    x_star <- rexp(n, lambda_hat[1])  # draw x*
+    y_star <- rexp(n, lambda_hat[2])  # draw y*
+    z_star <- pmax(x_star, y_star)    # compute z = max(x, y)
+    u_star <- 1*(x_star >= y_star)    # compute u = I(x >= y)
+    lambda_star <- EM(z_star, u_star, lambda_hat, itermax, tol)$lambda  # get estimate
+    lambda_list[i,] <- lambda_star                                      # add estimate
+  }
+  sigma_hat <- apply(lambda_list, 2, sd)              # compute sample standard deviation
+  mu_hat <- apply(lambda_list, 2, mean)               # compute sample mean
+  bias <- mu_hat - lambda_hat                         # compute the bias
+  rho_hat <- cor(lambda_list[, 1], lambda_list[, 2])  # compute the sample correlation
+  list(sample_sd = sigma_hat, bias = bias, sample_cor = rho_hat)
+}
+```
+
+We get the following estimates of $\SD[\hat\lambda_0], \SD[\hat\lambda_1], \Bias[\hat\lambda_0], \Bias[\hat\lambda_1]$ and $\Corr[\hat\lambda_0,\hat\lambda_1]$.
+
+```{r compute-param-boot}
+set.seed(93)
+result <- param_boot(EM_result$lambda)
+result
+```
+
+The standard deviations are of order $10^{-1}$, giving us a fair confidence in the estimated parameters.
+The estimated correlation is very weak, practically speaking it is zero, which is expected as there is no reason for the parameters to be related in any way, as all the computations of the two values are done separately.
+However, we notice that there is a small positive bias, which means that the ML estimators are larger than their expected values.
+As we are interested in the true values of the parameters $\lambda_0$ and $\lambda_1$, we would prefer to go for a bias-corrected estimate.
+
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 4.
+We now wish to find an analytical formula for $f_{Z_i, \, U_i}(z_i, u_i \mid \lambda_0, \lambda_1)$. We start by noting that $u_i \in \{ 0, 1  \}$, so we treat the two cases individually. We can then find the CDF
+\begin{align*}
+  F_{Z_i}(z_i \mid u_i = 1, \lambda_0, \lambda_1) &= \Pr(X_i \leq z_i, Y_i \leq X_i) = \int_0^{z_i} \int_0^x f_X(x \mid \lambda_0) f_Y(y \mid \lambda_1) \dy \dx
+  \\
+  &= \int_0^{z_i} \int_0^x \lambda_0 \e^{-\lambda_0 x} \lambda_1 \e^{-\lambda_1 y} \dy \dx = \int_0^{z_i} \lambda_0 \e^{-\lambda_0 x} (1 - \e^{-\lambda_1 x}) \dx
+  \\
+  &= \lambda_0 \int_0^{z_i} (\e^{-\lambda_0 x} - \e^{-(\lambda_0 +\lambda_1) x}) \dx = 1 - \e^{-\lambda_0 z_i} + \frac{\lambda_0}{\lambda_0 + \lambda_1} [ \e^{-(\lambda_0 + \lambda_1) z_i} - 1 ],
+\end{align*}
+which by differentiating with respect to $z_i$ gives the PDF
+$$
+  f_{Z_i}(z_i \mid u_i = 1, \lambda_0, \lambda_1) = \lambda_0 \e^{-\lambda_0 z_i} - \lambda_0 \e^{-(\lambda_0 + \lambda_1) z_i} = \lambda_0 \e^{-\lambda_0 z_i} ( 1 - \e^{-\lambda_1 z_i} ).
+$$
+We can then do the same for the case when $u_i = 0$, giving
+$$
+  f_{Z_i}(z_i \mid u_i = 0, \lambda_0, \lambda_1) = \lambda_1 \e^{-\lambda_1 z_i} ( 1 - \e^{-\lambda_0 z_i} ),
+$$
+which can also be seen from the symmetric properties of the problem. It then follows that the quantity we wanted is
+$$
+  f_{Z_i, \, U_i}(z_i, u_i \mid \lambda_0, \lambda_1) =
+  \begin{cases}
+    \lambda_1 \e^{-\lambda_1 z_i} ( 1 - \e^{-\lambda_0 z_i} ) & \text{for } u_i = 0,
+    \\
+    \lambda_0 \e^{-\lambda_0 z_i} ( 1 - \e^{-\lambda_1 z_i} ) & \text{for } u_i = 1.
+  \end{cases}
+$$
+
+We also want to find the maximum likelihood estimators $\hat{\lambda}_0$ and $\hat{\lambda}_1$, and we then find the likelihood function
+$$
+  L(\lambda_0, \lambda_1 \mid \bfz, \bfu) = \prod_{i=1}^n f_{Z_i, \, U_i}(z_i, u_i \mid \lambda_0, \lambda_1) = \prod_{i \colon u_i=0} \lambda_1 \e^{-\lambda_1 z_i} ( 1 - \e^{-\lambda_0 z_i} ) \prod_{i \colon u_i=1} \lambda_0 \e^{-\lambda_0 z_i} ( 1 - \e^{-\lambda_1 z_i} ).
+$$
+The log-likelihood function is then
+$$
+  \ell(\lambda_0, \lambda_1 \mid \bfz, \bfu) = \sum_{i \colon u_i=0} \ln[\lambda_1 \e^{-\lambda_1 z_i} ( 1 - \e^{-\lambda_0 z_i} )] + \sum_{i \colon u_i=1} \ln[\lambda_0 \e^{-\lambda_0 z_i} ( 1 - \e^{-\lambda_1 z_i} )].
+$$
+We optimize this in the following code block using the `optim()` function in `R`.
+
+```{r MLE log-likelihood}
+
+# Defining the log-likelihood function. Note that it has to be defined
+# as the negative of what was discussed earlier to make optim() find
+# the maximum value, and not the minimum:
+log_likelihood <- function(lambdas, z, u) {
+  u0s <- which(u == 0)  # Indexes where u = 0
+  u1s <- which(u == 1)  # Indexes where u = 1
+  ll <- sum(log(lambdas[2] * exp(-lambdas[2]*z[u0s]) * (1 - exp(-lambdas[1]*z[u0s])))) +
+        sum(log(lambdas[1] * exp(-lambdas[1]*z[u1s]) * (1 - exp(-lambdas[2]*z[u1s]))))
+  return(-ll)
+}
+
+# Doing the optimization:
+MLE <- optim(par = c(1, 1), fn = log_likelihood, z = z, u = u)
+MLE$par
+
+```
+
+We see then that the maximum likelihood estimators are $\hat{\boldsymbol{\lambda}}_\mathrm{MLE} = \begin{bmatrix} 3.465890 & 9.351103 \end{bmatrix}^\top$. The absolute difference between the MLE and the EM estimators are shown below.
+
+```{r MLE and EM}
+
+abs(MLE$par - EM_result$lambda)
+
+```
+
+Se we see that the difference between the two estimators are small.
+
+There are some advantages in optimizing the likelihood directly compared to using the EM algorithm. One of the advantages is that the EM algorithm can be very slow, especially depending on the "amount" of missing data. Also for MLE, only one optimization is necessary, wile for the EM algorithm the parameterized function may need to be optimized iteratively.
+
+
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
 [//]: # ----------------------------------------------------------------------------------------------------------------
