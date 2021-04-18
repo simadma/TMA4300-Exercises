@@ -226,6 +226,14 @@ rowMeans(boot_beta_LA) - betas$LA
 The estimated variance of $\hat{\boldsymbol{\beta}}_\text{LA}$ is \textcolor{red}{smaller} than that of $\hat{\boldsymbol{\beta}}_\text{LS}$, and this is also true for the estimated bias. This suggests that the LS estimator is \textcolor{red}{not optimal} for the $\text{AR}(2)$ process.
 
 
+
+## Difficulties
+\begin{itemize}
+  \item The function \texttt{filter()} in the help files had a name collision when using the \texttt{tidyverse} package. We therefore had to use \texttt{stats::filter()}.
+\end{itemize}
+
+
+
 ## Appendix -- Code Part 1
 
 <!--
