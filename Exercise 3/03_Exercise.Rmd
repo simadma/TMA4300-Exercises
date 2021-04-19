@@ -85,7 +85,7 @@ where $e_t$ are i.i.d. random variables with zero mean and unit variance, for $t
 
 x <- data3A$x
 TT <- length(x)
-plot(1:TT, x, xlab = "t", ylab = "x")
+plot(1:TT, x, xlab = "t", ylab = "x", type = "l")
 
 ```
 
@@ -179,13 +179,14 @@ c(quantile(x_101_LA, 0.025), quantile(x_101_LA, 0.975))
 
 We see that the 95% prediction interval for $x_{101}$ using the LS estimator is a little wider than using the LA estimator. The prediction interval using the LS estimator is shown in red in Figure \ref{fig:prediction_intervals}, while the prediction interval using the LA estimator is shown in blue in the same figure. From this we see that it is reasonable that these are reasonable values for the 95% prediction intervals for $x_{101}$.
 
-```{r Time series with prediction intervals, fig.cap="\\label{fig:prediction_intervals}Time seres data with the 95% prediction intervals for $x_{101}$ using the LS estimator in red and using the LA estimator in blue."}
+```{r Time series pred, fig.cap="\\label{fig:prediction_intervals}Time seres data with the 95% prediction intervals for $x_{101}$ using the LS estimator in red and using the LA estimator in blue."}
 
-plot(1:TT, x, xlab = "t", ylab = "x")
+plot(1:TT, x, xlab = "t", ylab = "x", type = "l")
+clip(x1 = TT - 2, x2 = TT + 2, y1 = -60, y2 = 60)
 abline(h = quantile(x_101_LS, 0.025), col = "red")
 abline(h = quantile(x_101_LS, 0.975), col = "red")
-abline(h = quantile(x_101_LA, 0.025), col = "blue")
-abline(h = quantile(x_101_LA, 0.975), col = "blue")
+abline(h = quantile(x_101_LA, 0.025), col = "blue", lty = "dashed")
+abline(h = quantile(x_101_LA, 0.975), col = "blue", lty = "dashed")
 
 ```
 
@@ -241,7 +242,7 @@ bilirubin %>%
 Fval <- lm_fit_summary$fstatistic[1]
 ```
 
-The summary output shows the $F$-statistic on 2 and 26 degrees of freedom with the respective $p$-value of `r lm_fit_summary$fstatistic[2]``. With a significance level of $5\%$, we reject the null hypothesis and say there is evidence of the individuals having different concentrations of bilirubin.
+The summary output shows the $F$-statistic on 2 and 26 degrees of freedom with the respective $p$-value of 0.03946. With a significance level of $5\%$, we reject the null hypothesis and say there is evidence of the individuals having different concentrations of bilirubin.
 
 
 [//]: # ----------------------------------------------------------------------------------------------------------------
