@@ -43,7 +43,7 @@ source("probAhelp.R")  # Code
 
 x <- data3A$x
 TT <- length(x)
-plot(1:TT, x, xlab = "t", ylab = "x")
+plot(1:TT, x, xlab = "t", ylab = "x", type = "l")
 ```
 
 
