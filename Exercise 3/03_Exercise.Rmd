@@ -157,7 +157,7 @@ From this we see that the estimated variance of $\hat{\bfbeta}_\mathrm{LA}$ is s
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 2.
-In this part we want to compute a 95% prediction interval for $x_{101}$ based on the LS and the LA estimators, using the bootstrapped time series and parameter estimates obtained earlier. For this we use `boot_res_LS` and `boot_res_LA`, as we found in the last part. Using this we can simulate
+In this part we want to compute a 95% prediction interval for $x_{101}$ based on the LS and the LA estimators, using the bootstrapped time series and parameter estimates obtained earlier. For this we use `boot_res_LS` and `boot_res_LA`, as we found in the last part. Using this we can estimate
 $$
   x_{101} = \hat{\beta}_1 x_{100} + \hat{\beta}_2 x_{99} + \hat{\varepsilon}_{101},
 $$
