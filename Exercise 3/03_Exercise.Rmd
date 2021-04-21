@@ -102,6 +102,8 @@ In the following code block we generate $B=2000$ bootstrap samples of the residu
 
 ```{r AR(2)}
 
+set.seed(269)
+
 # Estimates for the betas:
 betas <- ARp.beta.est(x, 2)
 # Corresponding residuals:
@@ -165,6 +167,8 @@ where $\hat{\bfbeta}$ is either $\hat{\bfbeta}_\mathrm{LS}$ or $\hat{\bfbeta}_\m
 
 ```{r AR(2) prediction interval}
 
+set.seed(269)
+
 # Finding x_101 for the two estimators:
 x_101_LS <- boot_beta_LS[1, ] * x[TT] + boot_beta_LS[2, ] * x[TT-1] +
             sample(boot_res_LS, B, replace = TRUE)
@@ -177,16 +181,15 @@ c(quantile(x_101_LA, 0.025), quantile(x_101_LA, 0.975))
 
 ```
 
-We see that the 95% prediction interval for $x_{101}$ using the LS estimator is a little wider than using the LA estimator. The prediction interval using the LS estimator is shown in red in Figure \ref{fig:prediction_intervals}, while the prediction interval using the LA estimator is shown in blue in the same figure. From this we see that it is reasonable that these are reasonable values for the 95% prediction intervals for $x_{101}$.
+We see that the 95% prediction interval for $x_{101}$ using the LS estimator is `r round(quantile(x_101_LS, 0.975) - quantile(x_101_LS, 0.025), 2)`, while for the LA estimator it is `r round(quantile(x_101_LA, 0.975) - quantile(x_101_LA, 0.025), 2)`. That is, they are almost equally wide. The prediction interval using the LS estimator is shown in red in Figure \ref{fig:prediction_intervals}, while the prediction interval using the LA estimator is shown in blue in the same figure. From this we see that it is reasonable that these are reasonable values for the 95% prediction intervals for $x_{101}$.
 
 ```{r Time series pred, fig.cap="\\label{fig:prediction_intervals}Time seres data with the 95% prediction intervals for $x_{101}$ using the LS estimator in red and using the LA estimator in blue."}
 
 plot(1:TT, x, xlab = "t", ylab = "x", type = "l")
-clip(x1 = TT - 2, x2 = TT + 2, y1 = -60, y2 = 60)
-abline(h = quantile(x_101_LS, 0.025), col = "red")
-abline(h = quantile(x_101_LS, 0.975), col = "red")
-abline(h = quantile(x_101_LA, 0.025), col = "blue", lty = "dashed")
-abline(h = quantile(x_101_LA, 0.975), col = "blue", lty = "dashed")
+lines(c(TT-2, TT+2), rep(quantile(x_101_LS, 0.025), 2), type = "l", col = "red")
+lines(c(TT-2, TT+2), rep(quantile(x_101_LS, 0.975), 2), type = "l", col = "red")
+lines(c(TT-2, TT+2), rep(quantile(x_101_LA, 0.025), 2), type = "l", col = "blue")
+lines(c(TT-2, TT+2), rep(quantile(x_101_LA, 0.975), 2), type = "l", col = "blue")
 
 ```
 
