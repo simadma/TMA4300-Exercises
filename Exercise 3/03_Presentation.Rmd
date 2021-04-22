@@ -15,20 +15,6 @@ knitr::opts_chunk$set(
 knitr::opts_knit$set(root.dir = "./Additional files")  # Changed working directory
 ```
 
-## The Problem
-
-Use the residual resampling bootstrap method to evaluate the relative performance of the two parameter estimators $\hat{\boldsymbol{\beta}}_\text{LS}$ and $\hat{\boldsymbol{\beta}}_\text{LA}$, arising from minimizing
-$$
-  Q_\text{LS}(\mathbf{x}) = \sum_{t=3}^T (x_t - \beta_1 x_{t-1} - \beta_2 x_{t-2})^2,
-$$
-and
-$$
-  Q_\text{LA}(\mathbf{x}) = \sum_{t=3}^T |x_t - \beta_1 x_{t-1} - \beta_2 x_{t-2}|,
-$$
-respectively. Specifically, estimate the variance and bias of the two estimators. Is the LS estimator optimal for the AR(2) process?
-
-
-
 ## The Time Series and the Model
 
 Assume an \textcolor{red}{AR(2) model}
@@ -45,6 +31,20 @@ x <- data3A$x
 TT <- length(x)
 plot(1:TT, x, xlab = "t", ylab = "x", type = "l")
 ```
+
+
+
+## The Problem
+
+Use the residual resampling bootstrap method to evaluate the relative performance of the two parameter estimators $\hat{\boldsymbol{\beta}}_\text{LS}$ and $\hat{\boldsymbol{\beta}}_\text{LA}$, arising from minimizing
+$$
+  Q_\text{LS}(\mathbf{x}) = \sum_{t=3}^T (x_t - \beta_1 x_{t-1} - \beta_2 x_{t-2})^2,
+$$
+and
+$$
+  Q_\text{LA}(\mathbf{x}) = \sum_{t=3}^T |x_t - \beta_1 x_{t-1} - \beta_2 x_{t-2}|,
+$$
+respectively. Specifically, estimate the variance and bias of the two estimators. Is the LS estimator optimal for the AR(2) process?
 
 
 

@@ -80,7 +80,7 @@ We consider here the $\mathrm{AR}(2)$ model specified by the relation
 $$
   x_t = \beta_1 x_{t-1} + \beta_2 x_{t-2} + e_t,
 $$
-where $e_t$ are i.i.d. random variables with zero mean and unit variance, for $t=3, \dots, T$. In our case we analyze the data in `data3A$x`, which is of length $T=100$, and has the form as in Figure \ref{fig:time_series}.
+where $e_t$ are i.i.d. random variables with zero mean and constant variance, for $t=3, \dots, T$. In our case we analyze the data in `data3A$x`, which is of length $T=100$, and has the form as in Figure \ref{fig:time_series}.
 ```{r Time series, fig.width = 5, fig.height = 3, fig.cap="\\label{fig:time_series}Time seres data."}
 
 x <- data3A$x
@@ -89,7 +89,8 @@ plot(1:TT, x, xlab = "t", ylab = "x", type = "l")
 
 ```
 
-The minimizers $\hat{\bfbeta}_\mathrm{LS}$ and $\hat{\bfbeta}_\mathrm{LA}$ are obtained by minimizing
+The minimizers $\hat{\bfbeta}_\mathrm{LS}$ and $\hat{\bfbeta}_\mathrm{LA}$ are obtained by minimizing the sum of squared residuals (LS) and the sum of absolute residuals (LA), respectively. 
+That is, we minimize
 $$
   Q_\mathrm{LS}(\bfx) = \sum_{t=3}^T (x_t - \beta_1 x_{t-1} - \beta_2 x_{t-2})^2
   \quad \text{and} \quad
@@ -181,7 +182,7 @@ c(quantile(x_101_LA, 0.025), quantile(x_101_LA, 0.975))
 
 ```
 
-We see that the 95% prediction interval for $x_{101}$ using the LS estimator is `r round(quantile(x_101_LS, 0.975) - quantile(x_101_LS, 0.025), 2)`, while for the LA estimator it is `r round(quantile(x_101_LA, 0.975) - quantile(x_101_LA, 0.025), 2)`. That is, they are almost equally wide. The prediction interval using the LS estimator is shown in red in Figure \ref{fig:prediction_intervals}, while the prediction interval using the LA estimator is shown in blue in the same figure. From this we see that it is reasonable that these are reasonable values for the 95% prediction intervals for $x_{101}$.
+We see that the 95% prediction interval for $x_{101}$ using the LS estimator is `r round(quantile(x_101_LS, 0.975) - quantile(x_101_LS, 0.025), 2)`, while for the LA estimator it is `r round(quantile(x_101_LA, 0.975) - quantile(x_101_LA, 0.025), 2)`. That is, they are almost equally wide. The prediction interval is also shown in Figure \ref{fig:prediction_intervals}. Although the difference is small, we can expect this difference to accumulate when we predict more than one point. However, for only one data point, we conclude that LA and LS methods perform about the same on prediction.
 
 ```{r Time series pred, fig.cap="\\label{fig:prediction_intervals}Time seres data with the 95% prediction intervals for $x_{101}$ using the LS estimator in red and using the LA estimator in blue."}
 
@@ -202,7 +203,7 @@ lines(c(TT-2, TT+2), rep(quantile(x_101_LA, 0.975), 2), type = "l", col = "blue"
 
 [Bilirubin](http://en.wikipedia.org/wiki/Bilirubin) is a breakdown product of hemoglobin, which is a principal component of red blood cells. If the liver has suffered degeneration,  the decomposition of hemoglobin is elevated, or the gall bladder has been destroyed, large amounts of bilirubin can accumulate in the blood, leading to jaundice, which is a yellowish or greenish pigmentation in the skin.
 
-We will look at a data set taken from [@jorgensen1993theory]. It contains measurements of the concentration of bilirubin (mg/dL) in blood samples taken from an three young men, shown in Table \ref{tab:bilirubin}.
+We will look at a data set taken from Jørgensen [-@jorgensen1993theory]. It contains measurements of the concentration of bilirubin (mg/dL) in blood samples taken from an three young men, shown in Table \ref{tab:bilirubin}.
 
 ```{r bilirubin, echo = FALSE}
 bilirubin <- read.table("bilirubin.txt", header = TRUE)
@@ -225,15 +226,15 @@ We will use the $F$-statistic perform a permutation test.
 
 We set up the following regression model
 \begin{equation}\label{eq:B-lm}
-\log Y_{ij} = \beta_i + \epsilon_{ij},\quad \text{with}\quad i=1,2,3,\quad \text{and} j = 1,\ldots, n_i,
+\log Y_{ij} = \beta_i + \epsilon_{ij},\quad \text{with}\quad i=1,2,3,\quad \text{and} \quad j = 1,\ldots, n_i,
 \end{equation}
 where $n_i$ are the number of measurements from individual $i$, and $\epsilon_{ij}\sim\Normal(0,\sigma^2)$.
 We want to test if the concentration of bilirubin of the three young men are significantly different, so we set up the following hypothesis test
 $$
-  H_0 : \beta_1=\beta_2=\beta_3\quad\text{against}\quad H_1 : \exists i,j \in\{1,2,3\} : \beta_i\neq\beta_j.
+  H_0 : \beta_1=\beta_2=\beta_3\quad\text{against}\quad H_1 : \exists\, i,j \in\{1,2,3\} : \beta_i\neq\beta_j.
 $$
 
-A boxplot of the log measurements for each individual is shown in Figure \ref{fig:B-bilirubin-box}, where we see that individual 1 and individual 2 have similar mean measurements, albeit having different spread. Individual 3 stands out from the two others.
+A boxplot of the log measurements for each individual is shown in Figure \ref{fig:B-bilirubin-box}, where we see that individual 1 and individual 2 have similar median measurements, albeit individual 2 having a smaller spread. Individual 3 stands out from the two others.
 
 ```{r bilirubin fit, fig.width=4, fig.height=3, fig.align='center', fig.cap="\\label{fig:B-bilirubin-box}Box plot showing the log concentration of biliburin from the three young men."}
 bilirubin %>% 
@@ -272,7 +273,7 @@ permTest <- function(data) {
 We now perform the permutation test with a sample size of 999.
 A histogram of the $F$-statistics is shown in Figure \ref{fig:B-F-hist}. We see it fits well under the curve of the theoretical density of the $F$ distribution.
 
-```{r testing perm, fig.width=5, fig.height=3, fig.align='center', fig.cap="\\label{fig:B-F-hist}Normalized histogram of F-statistic from 999 permutations of the \\texttt{bilirubin.txt} data together with the theoretical $F$ distribution on 2 and 26 degrees of freedom. The vertical line is the $F$-statistic of the original model."}
+```{r testing perm, fig.width=6, fig.height=3, fig.align='center', fig.cap="\\label{fig:B-F-hist}Normalized histogram of F-statistic from 999 permutations of the \\texttt{bilirubin.txt} data together with the theoretical $F$ distribution on 2 and 26 degrees of freedom. The vertical line is the $F$-statistic of the original model."}
 set.seed(42)
 Fvals <- replicate(n = 999, permTest(bilirubin))
 
@@ -477,7 +478,6 @@ EM <- function(z, u, lambda, itermax = 300, tol = 1e-10) {
   list(lambda = lambda_next, log_liks = log_liks)
 }
 ```
-Looking at Figure \ref{fig:em-observed}, we can make an initial guess for the rate parameters.
 Since we only see the maximum of $x$ and $y$, we expect that $\E[X] < \E[Z\mid U=1]$ and $\E[Y]< \E[Z\mid U=0]$.
 
 ```{r mean-observed}
@@ -488,14 +488,10 @@ We then use the starting values $(\lambda_0^{(0)}, \lambda_1^{(0)}) = (1/0.4, 1/
 
 ```{r}
 EM_result <- EM(z, u, c(2.5, 5), tol = 1e-10)
-cat(sprintf("Estimate of lambda_%d: %.2f\n", 0:1, EM_result$lambda))
+cat(sprintf("Estimate of lambda_%d: %.5f\n", 0:1, EM_result$lambda))
 ```
 
-We get the estimates
-$$
- (\hat\lambda_0, \hat\lambda_1) = (3.47, 9.35),
-$$
-which is higher than the initial values as expected.
+These estimates $(\hat\lambda_0,\hat\lambda_1)$ are slightly higher than the initial values $(\lambda_0^{(0)}, \lambda_1^{(0)})$ as expected.
 
 A convergence plot of the $Q(\cdot)$-function is seen in Figure \ref{fig:em-convergence}.
 We see that it converges very fast.
@@ -521,13 +517,13 @@ The procedure is shown in Algorithm \ref{alg:c-bootstrap}.
 \begin{algorithm}[H]\label{alg:c-bootstrap}
 \SetAlgoLined
 \KwResult{Standard deviations, biases and correlation of $\hat\lambda_0,\hat\lambda_1$}
-  set $(\lambda_0^{(0)},\lambda_1^{(0)})\leftarrow(\hat\lambda_0,\hat\lambda_1)$\;
-  set $n\leftarrow200$\;
-  initialize $\vect\lambda$-List of length $B$\;
+  Set $(\lambda_0^{(0)},\lambda_1^{(0)})\leftarrow(\hat\lambda_0,\hat\lambda_1)$\;
+  Set $n\leftarrow200$\;
+  Initialize $\vect\lambda$-List of length $B$\;
   \For{$i\leftarrow 1$ \KwTo $B$}{
     Draw $x_1^*, \ldots, x_n^*\sim\Exp(\hat\lambda_0)$\;
     Draw $y_1^*, \ldots, y_n^*\sim\Exp(\hat\lambda_1)$\;
-    initialize $n$-vectors $\vect z^*$ and $\vect u^*$\;
+    Initialize $n$-vectors $\vect z^*$ and $\vect u^*$\;
     \For{$j\leftarrow 1$ \KwTo $n$}{
       $z_j^*\leftarrow \max(x_j^*, y_j^*)$\;
       $u_j^*\leftarrow I(x_j^*\geq y_j^*)$\;
@@ -586,15 +582,15 @@ As we are interested in the true values of the parameters $\lambda_0$ and $\lamb
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 4.
-We now wish to find an analytical formula for $f_{Z_i, \, U_i}(z_i, u_i \mid \lambda_0, \lambda_1)$. We start by noting that $u_i \in \{ 0, 1  \}$, so we treat the two cases individually. We can then find the CDF
+We wish to find an analytic formula for $f_{Z_i, \, U_i}(z_i, u_i \mid \lambda_0, \lambda_1)$. The CDF is found by
 \begin{align*}
   F_{Z_i}(z_i \mid u_i = 1, \lambda_0, \lambda_1) &= \Pr(X_i \leq z_i, Y_i \leq X_i) = \int_0^{z_i} \int_0^x f_X(x \mid \lambda_0) f_Y(y \mid \lambda_1) \dy \dx
   \\
   &= \int_0^{z_i} \int_0^x \lambda_0 \e^{-\lambda_0 x} \lambda_1 \e^{-\lambda_1 y} \dy \dx = \int_0^{z_i} \lambda_0 \e^{-\lambda_0 x} (1 - \e^{-\lambda_1 x}) \dx
   \\
-  &= \lambda_0 \int_0^{z_i} (\e^{-\lambda_0 x} - \e^{-(\lambda_0 +\lambda_1) x}) \dx = 1 - \e^{-\lambda_0 z_i} + \frac{\lambda_0}{\lambda_0 + \lambda_1} [ \e^{-(\lambda_0 + \lambda_1) z_i} - 1 ],
+  &= \lambda_0 \int_0^{z_i} (\e^{-\lambda_0 x} - \e^{-(\lambda_0 +\lambda_1) x}) \dx = 1 - \e^{-\lambda_0 z_i} + \frac{\lambda_0}{\lambda_0 + \lambda_1} [ \e^{-(\lambda_0 + \lambda_1) z_i} - 1 ].
 \end{align*}
-which by differentiating with respect to $z_i$ gives the PDF
+We separate the computation for cases when $u_i = 1$ and $u_i=2$, $i=1,\ldots, n$. For $u_i=0$, differentiating the CDF with respect to $z_i$ gives the PDF
 $$
   f_{Z_i}(z_i \mid u_i = 1, \lambda_0, \lambda_1) = \lambda_0 \e^{-\lambda_0 z_i} - \lambda_0 \e^{-(\lambda_0 + \lambda_1) z_i} = \lambda_0 \e^{-\lambda_0 z_i} ( 1 - \e^{-\lambda_1 z_i} ).
 $$
@@ -651,7 +647,7 @@ abs(MLE$par - EM_result$lambda)
 
 Se we see that the difference between the two estimators are small.
 
-There are some advantages in optimizing the likelihood directly compared to using the EM algorithm. One of the advantages is that the EM algorithm can be very slow, especially depending on the "amount" of missing data. Also for MLE, only one optimization is necessary, wile for the EM algorithm the parameterized function may need to be optimized iteratively.
+There are some advantages in optimizing the likelihood directly compared to using the EM algorithm. One of the advantages is that it is generally more efficient, as the EM algorithm can be very slow, especially depending on the "amount" of missing data. Also for MLE, only one optimization is necessary, while for the EM algorithm, the parameterized function may need to be optimized iteratively.
 
 
 
