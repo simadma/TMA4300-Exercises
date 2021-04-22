@@ -117,8 +117,6 @@ n <- length(res_LS)   # = length(res_LA) is the size of resampling
 # Initialize to store samples:
 boot_beta_LS <- matrix(NA, nrow = 2, ncol = B)
 boot_beta_LA <- matrix(NA, nrow = 2, ncol = B)
-boot_res_LS <- matrix(NA, nrow = n, ncol = B)
-boot_res_LA <- matrix(NA, nrow = n, ncol = B)
 
 for(b in 1:B) {
   # Sample the residuals:
@@ -132,9 +130,6 @@ for(b in 1:B) {
   # Append betas to the bootstrap matrices:
   boot_beta_LS[, b] <- beta_boot_LS
   boot_beta_LA[, b] <- beta_boot_LA
-  # Append residuals (for use in Subproblem 2):
-  boot_res_LS[, b] <- ARp.resid(x_LS, beta_boot_LS)
-  boot_res_LA[, b] <- ARp.resid(x_LA, beta_boot_LA)
 }
 
 ```
@@ -168,29 +163,33 @@ where $\hat{\bfbeta}$ is either $\hat{\bfbeta}_\mathrm{LS}$ or $\hat{\bfbeta}_\m
 
 ```{r AR(2) prediction interval}
 
-set.seed(269)
+set.seed(26)
 
 # Finding x_101 for the two estimators:
-x_101_LS <- boot_beta_LS[1, ] * x[TT] + boot_beta_LS[2, ] * x[TT-1] +
-            sample(boot_res_LS, B, replace = TRUE)
-x_101_LA <- boot_beta_LA[1, ] * x[TT] + boot_beta_LA[2, ] * x[TT-1] +
-            sample(boot_res_LA, B, replace = TRUE)
+x_101_LS <- t(boot_beta_LS[, sample(B, replace = TRUE)]) %*% x[TT - 0:1] +
+  sample(res_LS, B, replace = TRUE)
+x_101_LA <- t(boot_beta_LA[, sample(B, replace = TRUE)]) %*% x[TT - 0:1] +
+  sample(res_LA, B, replace = TRUE)
 
 # The prediction intervals for x_101 for LS and LA:
-c(quantile(x_101_LS, 0.025), quantile(x_101_LS, 0.975))
-c(quantile(x_101_LA, 0.025), quantile(x_101_LA, 0.975))
+pred_int <- rbind(
+  LS = quantile(x_101_LS, c(0.025, 0.975)),
+  LA = quantile(x_101_LA, c(0.025, 0.975))
+  )
 
+pred_int
 ```
 
-We see that the 95% prediction interval for $x_{101}$ using the LS estimator is `r round(quantile(x_101_LS, 0.975) - quantile(x_101_LS, 0.025), 2)`, while for the LA estimator it is `r round(quantile(x_101_LA, 0.975) - quantile(x_101_LA, 0.025), 2)`. That is, they are almost equally wide. The prediction interval is also shown in Figure \ref{fig:prediction_intervals}. Although the difference is small, we can expect this difference to accumulate when we predict more than one point. However, for only one data point, we conclude that LA and LS methods perform about the same on prediction.
+We see that the 95% prediction interval for $x_{101}$ using the LS estimator is `r round(quantile(x_101_LS, 0.975) - quantile(x_101_LS, 0.025), 2)`, while for the LA estimator it is `r round(quantile(x_101_LA, 0.975) - quantile(x_101_LA, 0.025), 2)`. That is, they are almost equally wide. The prediction interval is also shown in Figure \ref{fig:prediction_intervals}. We conclude that both models perform equally well on predicting the next data point, despite the fact that $\widehat{\Var}[\hat{\vect\beta}_\mathrm{LA}] < \widehat{\Var}[\hat{\vect\beta}_\mathrm{LS}]$.
 
 ```{r Time series pred, fig.cap="\\label{fig:prediction_intervals}Time seres data with the 95% prediction intervals for $x_{101}$ using the LS estimator in red and using the LA estimator in blue."}
 
 plot(1:TT, x, xlab = "t", ylab = "x", type = "l")
-lines(c(TT-2, TT+2), rep(quantile(x_101_LS, 0.025), 2), type = "l", col = "red")
-lines(c(TT-2, TT+2), rep(quantile(x_101_LS, 0.975), 2), type = "l", col = "red")
-lines(c(TT-2, TT+2), rep(quantile(x_101_LA, 0.025), 2), type = "l", col = "blue")
-lines(c(TT-2, TT+2), rep(quantile(x_101_LA, 0.975), 2), type = "l", col = "blue")
+lines(c(TT-1, TT+3), rep(pred_int["LS", 1], 2), type = "l", col = 2, lwd = 2)
+lines(c(TT-1, TT+3), rep(pred_int["LS", 2], 2), type = "l", col = 2, lwd = 2)
+lines(c(TT-1, TT+3), rep(pred_int["LA", 1], 2), type = "l", col = 4, lty = 2, lwd = 1.5)
+lines(c(TT-1, TT+3), rep(pred_int["LA", 2], 2), type = "l", col = 4, lty = 2, lwd = 1.5)
+legend("topleft", legend = c("LS", "LA"), col = c(2, 4), lty = c(1, 2), lwd = 1.5)
 
 ```
 
@@ -582,15 +581,15 @@ As we are interested in the true values of the parameters $\lambda_0$ and $\lamb
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 4.
-We wish to find an analytic formula for $f_{Z_i, \, U_i}(z_i, u_i \mid \lambda_0, \lambda_1)$. The CDF is found by
+We wish to find an analytic formula for $f_{Z_i, \, U_i}(z_i, u_i \mid \lambda_0, \lambda_1)$. We separate the computation for cases when $u_i = 1$ and $u_i=2$, $i=1,\ldots, n$. The CDF is found by
 \begin{align*}
   F_{Z_i}(z_i \mid u_i = 1, \lambda_0, \lambda_1) &= \Pr(X_i \leq z_i, Y_i \leq X_i) = \int_0^{z_i} \int_0^x f_X(x \mid \lambda_0) f_Y(y \mid \lambda_1) \dy \dx
   \\
   &= \int_0^{z_i} \int_0^x \lambda_0 \e^{-\lambda_0 x} \lambda_1 \e^{-\lambda_1 y} \dy \dx = \int_0^{z_i} \lambda_0 \e^{-\lambda_0 x} (1 - \e^{-\lambda_1 x}) \dx
   \\
-  &= \lambda_0 \int_0^{z_i} (\e^{-\lambda_0 x} - \e^{-(\lambda_0 +\lambda_1) x}) \dx = 1 - \e^{-\lambda_0 z_i} + \frac{\lambda_0}{\lambda_0 + \lambda_1} [ \e^{-(\lambda_0 + \lambda_1) z_i} - 1 ].
+  &= \lambda_0 \int_0^{z_i} (\e^{-\lambda_0 x} - \e^{-(\lambda_0 +\lambda_1) x}) \dx = 1 - \e^{-\lambda_0 z_i} + \frac{\lambda_0}{\lambda_0 + \lambda_1} [ \e^{-(\lambda_0 + \lambda_1) z_i} - 1 ],
 \end{align*}
-We separate the computation for cases when $u_i = 1$ and $u_i=2$, $i=1,\ldots, n$. For $u_i=0$, differentiating the CDF with respect to $z_i$ gives the PDF
+which we differentiate with respect to $z_i$ giving the PDF
 $$
   f_{Z_i}(z_i \mid u_i = 1, \lambda_0, \lambda_1) = \lambda_0 \e^{-\lambda_0 z_i} - \lambda_0 \e^{-(\lambda_0 + \lambda_1) z_i} = \lambda_0 \e^{-\lambda_0 z_i} ( 1 - \e^{-\lambda_1 z_i} ).
 $$
