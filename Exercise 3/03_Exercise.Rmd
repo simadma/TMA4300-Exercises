@@ -581,33 +581,22 @@ As we are interested in the true values of the parameters $\lambda_0$ and $\lamb
 [//]: # ----------------------------------------------------------------------------------------------------------------
 
 ## Subproblem 4.
-We wish to find an analytic formula for $f_{Z_i, \, U_i}(z_i, u_i \mid \lambda_0, \lambda_1)$. We separate the computation for cases when $u_i = 1$ and $u_i=2$, $i=1,\ldots, n$. The CDF is found by
-\begin{align*}
-  F_{Z_i}(z_i \mid u_i = 1, \lambda_0, \lambda_1) &= \Pr(X_i \leq z_i, Y_i \leq X_i) = \int_0^{z_i} \int_0^x f_X(x \mid \lambda_0) f_Y(y \mid \lambda_1) \dy \dx
-  \\
-  &= \int_0^{z_i} \int_0^x \lambda_0 \e^{-\lambda_0 x} \lambda_1 \e^{-\lambda_1 y} \dy \dx = \int_0^{z_i} \lambda_0 \e^{-\lambda_0 x} (1 - \e^{-\lambda_1 x}) \dx
-  \\
-  &= \lambda_0 \int_0^{z_i} (\e^{-\lambda_0 x} - \e^{-(\lambda_0 +\lambda_1) x}) \dx = 1 - \e^{-\lambda_0 z_i} + \frac{\lambda_0}{\lambda_0 + \lambda_1} [ \e^{-(\lambda_0 + \lambda_1) z_i} - 1 ],
-\end{align*}
-which we differentiate with respect to $z_i$ giving the PDF
+
+We wish to find an analytic formula for $f_{Z_i, \, U_i}(z_i, u_i \mid \lambda_0, \lambda_1)$. Omitting the indices for $Z_i, U_i, X_i$ and $Y_i$ for computational convenience, we get
 $$
-  f_{Z_i}(z_i \mid u_i = 1, \lambda_0, \lambda_1) = \lambda_0 \e^{-\lambda_0 z_i} - \lambda_0 \e^{-(\lambda_0 + \lambda_1) z_i} = \lambda_0 \e^{-\lambda_0 z_i} ( 1 - \e^{-\lambda_1 z_i} ).
-$$
-We can then do the same for the case when $u_i = 0$, giving
-$$
-  f_{Z_i}(z_i \mid u_i = 0, \lambda_0, \lambda_1) = \lambda_1 \e^{-\lambda_1 z_i} ( 1 - \e^{-\lambda_0 z_i} ),
-$$
-which can also be seen from the symmetric properties of the problem. It then follows that the quantity we wanted is
-$$
-  f_{Z_i, \, U_i}(z_i, u_i \mid \lambda_0, \lambda_1) =
-  \begin{cases}
-    \lambda_1 \e^{-\lambda_1 z_i} ( 1 - \e^{-\lambda_0 z_i} ) & \text{for } u_i = 0,
-    \\
-    \lambda_0 \e^{-\lambda_0 z_i} ( 1 - \e^{-\lambda_1 z_i} ) & \text{for } u_i = 1.
-  \end{cases}
+\begin{split}
+ f_{Z,U}(z,u\mid\lambda_0,\lambda_1) &=
+ \Pr(\max(X,Y)=z, I(X\geq Y) = u\mid\lambda_0,\lambda_1) \\
+ &=u\Pr(\max(X, Y) = z, X\geq Y\mid\lambda_0,\lambda_1) + (1 - u)\Pr(\max(X, Y) = z,Y>X\mid\lambda_0,\lambda_1) \\
+ &=u\Pr(X = z, X\geq Y\mid\lambda_0,\lambda_1) + (1 - u)\Pr(Y = z,Y > X\mid\lambda_0,\lambda_1) \\
+ &=uf_X(z\mid\lambda_0,\lambda_1)\Pr(X\geq Y\mid X=z,\lambda_0,\lambda_1) \\
+ &\quad + (1 - u)f_Y(z\mid\lambda_0,\lambda_1)\Pr(Y > X\mid Y=z,\lambda_0,\lambda_1) \\
+ &= uf_X(z\mid\lambda_0,\lambda_1)F_Y(z\mid\lambda_0,\lambda_1) + (1 - u)f_Y(z\mid\lambda_0,\lambda_1)F_X(x\mid\lambda_0,\lambda_1) \\
+ &= u\lambda_0\e^{-\lambda_0z}(1 - \e^{-\lambda_1z}) + (1 - u)\lambda_1\e^{-\lambda_1z}(1 - \e^{-\lambda_0z}).
+\end{split}
 $$
 
-We also want to find the maximum likelihood estimators $\hat{\lambda}_0$ and $\hat{\lambda}_1$, and we then find the likelihood function
+We also want to find the maximum likelihood estimators $\hat{\lambda}_0$ and $\hat{\lambda}_1$. The likelihood function is given by
 $$
   L(\lambda_0, \lambda_1 \mid \bfz, \bfu) = \prod_{i=1}^n f_{Z_i, \, U_i}(z_i, u_i \mid \lambda_0, \lambda_1) = \prod_{i \colon u_i=0} \lambda_1 \e^{-\lambda_1 z_i} ( 1 - \e^{-\lambda_0 z_i} ) \prod_{i \colon u_i=1} \lambda_0 \e^{-\lambda_0 z_i} ( 1 - \e^{-\lambda_1 z_i} ).
 $$
@@ -623,8 +612,8 @@ We optimize this in the following code block using the `optim()` function in `R`
 # as the negative of what was discussed earlier to make optim() find
 # the maximum value, and not the minimum:
 log_likelihood <- function(lambdas, z, u) {
-  u0s <- which(u == 0)  # Indexes where u = 0
-  u1s <- which(u == 1)  # Indexes where u = 1
+  u0s <- which(u == 0)  # Indices where u = 0
+  u1s <- which(u == 1)  # Indices where u = 1
   ll <- sum(log(lambdas[2] * exp(-lambdas[2]*z[u0s]) * (1 - exp(-lambdas[1]*z[u0s])))) +
         sum(log(lambdas[1] * exp(-lambdas[1]*z[u1s]) * (1 - exp(-lambdas[2]*z[u1s]))))
   return(-ll)
