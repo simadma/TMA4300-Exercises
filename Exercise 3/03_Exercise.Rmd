@@ -635,7 +635,7 @@ abs(MLE$par - EM_result$lambda)
 
 Se we see that the difference between the two estimators are small.
 
-There are some advantages in optimizing the likelihood directly compared to using the EM algorithm. One of the advantages is that it is generally more efficient, as the EM algorithm can be very slow, especially depending on the "amount" of missing data. Also for MLE, only one optimization is necessary, while for the EM algorithm, the parameterized function may need to be optimized iteratively.
+There are some advantages in optimizing the likelihood directly compared to using the EM algorithm. One of the advantages is that it is generally more efficient, as the EM algorithm can be very slow, especially depending on the "amount" of missing data. Also for MLE, only one optimization is necessary, while for the EM algorithm, the parameterized function may need to be optimized iteratively. In addition to this, when optimizing the likelihood one can derive the Hessian at the curvature, which then can give the standard errors without having to use a bootstrapping.
 
 
 
